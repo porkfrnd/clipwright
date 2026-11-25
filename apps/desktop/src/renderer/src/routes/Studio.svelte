@@ -1,0 +1,593 @@
+<script lang="ts">
+  import { tick } from 'svelte'
+  import { appState, setRoute, toast, trackJob, jobState } from '$lib/state.svelte'
+  import { request, errorText } from '$lib/api'
+  import Icon from '$components/Icon.svelte'
+  import Button from '$components/Button.svelte'
+  import Player from '$components/Player.svelte'
+  import SubtitlePreview from '$components/SubtitlePreview.svelte'
+  import { timecode, durationLabel, bytesLabel, categoryMeta } from '$lib/categories'
+  import type { Selection, EditSettings } from '$shared/types'
+
+  let loading = $state(true)
+  let error = $state<string | null>(null)
+  let project = $state<any>(null)
+  let sources = $state<any[]>([])
+  let selections = $state<Selection[]>([])
+  let activeId = $state<string | null>(null)
+  let edit = $state<EditSettings | null>(null)
+  let transcript = $state<any>(null)
+  let presets = $state<any[]>([])
+  let exportsQueue = $state<any[]>([])
+  let player = $state<any>(null)
+  let previewUrl = $state<string | null>(null)
+  let previewStart = $state(0)
+  let previewEnd = $state<number | null>(null)
+  // Absolute source time represented by 0:00 in the current preview file.
+  // URL previews are downloaded sections, while local files play in full.
+  let previewOffset = $state(0)
+  let previewFrameWidth = $state(0)
+  let previewLoading = $state(false)
+  let currentTime = $state(0)
+  let activeJob = $state<any>(null)
+  let renderError = $state<string | null>(null)
+  let generating = $state(false)
+  let outputDir = $state('')
+  let quality = $state<'standard' | 'high'>('standard')
+  let preferHardware = $state(true)
+  let filenameTemplate = $state('{title}-{index}-{start}')
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  let saving = $state(false)
+  let musicPath = $state('')
+
+  const active = $derived(selections.find((s) => s.id === activeId) || selections[0] || null)
+  const activeSource = $derived(active ? sources.find((s) => s.id === active.candidate.sourceId) : null)
+  const defaultProfile = $derived(appState.providers.find((p) => p.id === (appState.defaultProfileId || appState.providers[0]?.id)))
+  const clipDuration = $derived(active ? active.candidate.endS - active.candidate.startS : 0)
+
+  $effect(() => {
+    if (appState.projectId) load()
+  })
+
+  $effect(() => {
+    if (!active && selections.length) activeId = selections[0].id
+  })
+
+  $effect(() => {
+    if (active) {
+      edit = active.edit
+      loadClip(active)
+    }
+  })
+
+  $effect(() => {
+    if (appState.settings) {
+      outputDir = appState.settings.render.outputDir || ''
+      quality = appState.settings.render.quality
+      preferHardware = appState.settings.render.preferHardware
+      filenameTemplate = appState.settings.render.filenameTemplate
+    }
+  })
+
+  async function load() {
+    loading = true
+    error = null
+    try {
+      const opened = await request('project.open', { projectId: appState.projectId })
+      project = opened.project
+      sources = opened.sources || opened.project.sources || []
+      selections = opened.selections || []
+      presets = opened.presets || []
+      exportsQueue = opened.exports || []
+      if (selections.length && !activeId) activeId = selections[0].id
+      await loadQueue()
+    } catch (err) {
+      error = errorText(err)
+    } finally {
+      loading = false
+    }
+  }
+
+  async function loadQueue() {
+    if (!appState.projectId) return
+    const queue = await request('render.queue', { projectId: appState.projectId }).catch(() => null)
+    if (queue) exportsQueue = queue.exports || []
+  }
+
+  async function loadClip(selection: Selection) {
+    const source = sources.find((s) => s.id === selection.candidate.sourceId)
+    const transcriptResult = await request('transcript.get', { sourceId: selection.candidate.sourceId }).catch(() => null)
+    transcript = transcriptResult?.transcript || null
+    if (!source) return
+    previewOffset = 0
+    if (source.kind === 'file' && source.mediaUrl) {
+      previewUrl = source.mediaUrl
+      previewStart = selection.candidate.startS
+      previewEnd = selection.candidate.endS
+    } else {
+      previewLoading = true
+      try {
+        const result = await request('source.fetch_preview', {
+          sourceId: source.id,
+          startS: Math.max(0, selection.candidate.startS - 1),
+          endS: selection.candidate.endS + 1
+        })
+        previewUrl = result.mediaUrl
+        previewOffset = Number(result.startS ?? Math.max(0, selection.candidate.startS - 1))
+        // The downloaded section includes padding before the chosen moment.
+        // Start at the moment itself so subtitles are visible immediately.
+        previewStart = Math.max(0, selection.candidate.startS - previewOffset)
+        previewEnd = Math.max(previewStart + 0.2, selection.candidate.endS - previewOffset)
+      } catch (err) {
+        toast('error', errorText(err))
+      } finally {
+        previewLoading = false
+      }
+    }
+    await tick()
+    player?.seek(previewStart)
+  }
+
+  function selectClip(selection: Selection) {
+    activeId = selection.id
+  }
+
+  function applyPreset(presetId: string) {
+    if (!active) return
+    const preset = presets.find((p) => p.id === presetId)
+    if (!preset) return
+    edit = { ...edit, ...preset.settings } as EditSettings
+    scheduleSave()
+    toast('success', `${preset.name} preset applied.`)
+  }
+
+  function update<K extends keyof EditSettings>(section: K, key: string, value: any) {
+    if (!edit) return
+    edit = { ...edit, [section]: { ...(edit[section] as any), [key]: value } }
+    scheduleSave()
+  }
+
+  function scheduleSave() {
+    if (saveTimer) clearTimeout(saveTimer)
+    // Capture the selection and snapshot now. If the user switches clips before
+    // the debounce fires, the edit must not be written to the new selection.
+    const selectionId = active?.id
+    const payload = edit
+    saving = true
+    saveTimer = setTimeout(async () => {
+      saveTimer = null
+      try {
+        if (!selectionId || !payload) return
+        const result = await request('edit.set', { selectionId, settings: payload })
+        if (active?.id === selectionId) {
+          edit = result.edit
+          active.edit = result.edit
+        }
+      } catch (err) {
+        toast('error', errorText(err))
+      } finally {
+        saving = false
+      }
+    }, 320)
+  }
+
+  function updateMetadata(key: string, value: any) {
+    if (!edit) return
+    edit = { ...edit, metadata: { ...edit.metadata, [key]: value } }
+    scheduleSave()
+  }
+
+  async function generateMetadata() {
+    if (!active) return
+    generating = true
+    try {
+      const result = await request('metadata.generate', {
+        candidateId: active.candidate.id,
+        providerProfileId: defaultProfile?.id
+      })
+      const meta = result.metadata
+      edit = {
+        ...edit!,
+        metadata: {
+          title: meta.title || edit!.metadata.title,
+          description: meta.description || edit!.metadata.description,
+          hashtags: meta.hashtags || edit!.metadata.hashtags
+        }
+      }
+      scheduleSave()
+      toast('success', 'Metadata drafted. It is AI-generated; edit before publishing.')
+    } catch (err) {
+      toast('error', errorText(err))
+    } finally {
+      generating = false
+    }
+  }
+
+  async function chooseOutput() {
+    const folder = await window.clipwright.chooseFolder()
+    if (!folder) return
+    outputDir = folder.path
+    await request('settings.set', { key: 'render', value: { outputDir } }).catch(() => null)
+    if (appState.settings) appState.settings.render.outputDir = outputDir
+  }
+
+  async function chooseMusic() {
+    const file = await window.clipwright.openMediaDialog()
+    if (file) {
+      musicPath = file.path
+      update('audio', 'musicPath', file.path)
+    }
+  }
+
+  async function startRender(ids: string[]) {
+    if (!ids.length) return
+    renderError = null
+    try {
+      const job = await request('render.start', {
+        projectId: appState.projectId,
+        selectionIds: ids,
+        outputDir,
+        quality,
+        preferHardware,
+        filenameTemplate
+      })
+      trackJob({ ...job, params: {}, checkpoint: {}, createdAt: '', updatedAt: '' } as any)
+      const finished = await waitForJob(job.jobId)
+      await loadQueue()
+      if (finished.state === 'succeeded') {
+        toast('success', 'Export finished and passed validation.')
+      } else if (finished.state === 'interrupted') {
+        renderError = finished.error?.message || 'The render stopped. You can resume it.'
+      }
+    } catch (err) {
+      renderError = errorText(err)
+    }
+  }
+
+  async function waitForJob(jobId: string) {
+    activeJob = jobState.jobs[jobId] || { id: jobId, state: 'queued', progress: {} }
+    while (true) {
+      const { job } = await request('jobs.get', { jobId })
+      activeJob = job
+      trackJob(job)
+      if (['succeeded', 'failed', 'cancelled', 'interrupted'].includes(job.state)) {
+        if (job.error) renderError = job.error.message
+        return job
+      }
+      await new Promise((resolve) => setTimeout(resolve, 700))
+    }
+  }
+
+  async function cancelRender() {
+    if (!activeJob) return
+    await request('jobs.cancel', { jobId: activeJob.id }).catch((err) => toast('error', errorText(err)))
+    await loadQueue()
+  }
+
+  async function resumeRender() {
+    if (!activeJob) return
+    await request('jobs.resume', { jobId: activeJob.id })
+    const job = await waitForJob(activeJob.id)
+    await loadQueue()
+    if (job.state === 'succeeded') toast('success', 'Export resumed and finished.')
+  }
+
+  async function showFile(path: string) {
+    const ok = await window.clipwright.showItemInFolder(path)
+    if (!ok) toast('error', 'That file is outside the chosen output folders.')
+  }
+</script>
+
+{#if loading}
+  <div class="page"><div class="empty card"><Icon name="loader" size={28} /><p>Opening the studio…</p></div></div>
+{:else if error}
+  <div class="page"><div class="notice error">{error}</div></div>
+{:else if !selections.length}
+  <div class="page">
+    <header class="page-head">
+      <div>
+        <div class="eyebrow">Studio</div>
+        <h1 style="margin-top:6px">Nothing on the bench</h1>
+        <p>Choose at least one moment in Discovery, then bring it here to frame, caption and export.</p>
+      </div>
+      <div class="spacer"></div>
+      <Button variant="primary" onclick={() => setRoute('project', appState.projectId!)}>Find moments</Button>
+    </header>
+    <div class="empty card"><Icon name="scissors" size={42} /><h3>No clips selected</h3><p>The Studio edits one selected moment at a time. Your selection tray lives in Discovery.</p></div>
+  </div>
+{:else if active && edit}
+  <div class="page">
+    <header class="page-head">
+      <div style="min-width:0">
+        <div class="row tight">
+          <div class="eyebrow">Studio</div>
+          <span class="pill" style={`--cat-color:${categoryMeta(active.candidate.category).color};color:${categoryMeta(active.candidate.category).color}`}>{categoryMeta(active.candidate.category).label}</span>
+          {#if saving}<span class="pill">saving…</span>{/if}
+        </div>
+        <h1 style="margin-top:6px;max-width:840px">{active.candidate.title}</h1>
+        <div class="row small muted" style="margin-top:8px">
+          <span class="mono">{timecode(active.candidate.startS)} → {timecode(active.candidate.endS)}</span>
+          <span>· {durationLabel(clipDuration)}</span>
+          <span>· fit {Math.round(active.candidate.fitScore)}</span>
+          {#if activeSource}<span>· {activeSource.title}</span>{/if}
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="row">
+        <Button variant="ghost" onclick={() => setRoute('project', appState.projectId!)}><Icon name="discovery" size={14} /> Discovery</Button>
+        <Button variant="primary" onclick={() => startRender([active.id])} disabled={activeJob && ['queued','running','waiting_rate_limit'].includes(activeJob.state)}>
+          <Icon name="download" size={15} /> Export this clip
+        </Button>
+      </div>
+    </header>
+
+    {#if selections.length > 1}
+      <div class="row" style="gap:8px;overflow-x:auto">
+        {#each selections as selection (selection.id)}
+          <button class={`pill ${selection.id === active.id ? 'gold' : ''}`} onclick={() => selectClip(selection)} style="max-width:240px">
+            <span class="truncate">{selection.candidate.title}</span>
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="studio-grid">
+      <div class="stack">
+        <div class="card tight">
+          <div class="row" style="justify-content:space-between;margin-bottom:10px">
+            <div class="eyebrow">Live preview</div>
+            <span class="tiny muted">subtitle overlay is a browser approximation of the burned render</span>
+          </div>
+          <div
+            bind:clientWidth={previewFrameWidth}
+            style="position:relative;width:min(430px, 34.875vh);margin:0 auto"
+          >
+            {#if previewLoading}
+              <div class="player-frame"><div class="player-empty"><Icon name="loader" size={26} /><div style="margin-top:10px">Fetching just this section…</div></div></div>
+            {:else}
+              <Player
+                bind:this={player}
+                src={previewUrl}
+                startS={previewStart}
+                endS={previewEnd}
+                layout={edit.framing.layout}
+                zoom={edit.framing.zoom}
+                onTime={(t) => (currentTime = t)}
+              />
+              <SubtitlePreview
+                segments={transcript?.segments || []}
+                startS={active.candidate.startS}
+                endS={active.candidate.endS}
+                current={currentTime + previewOffset}
+                style={edit.subtitles}
+                scale={previewFrameWidth ? previewFrameWidth / 1080 : 0.398}
+              />
+            {/if}
+          </div>
+        </div>
+
+        <div class="card tight">
+          <div class="spread" style="margin-bottom:10px">
+            <h3>Publishing metadata</h3>
+            <Button size="sm" variant="ghost" onclick={generateMetadata} disabled={generating}>
+              {#if generating}<Icon name="loader" size={13} /> Drafting…{:else}<Icon name="spark" size={13} /> Draft with AI{/if}
+            </Button>
+          </div>
+          <div class="stack">
+            <div class="field">
+              <label for="meta-title">Title</label>
+              <input id="meta-title" class="input" value={edit.metadata.title || active.candidate.title} oninput={(e) => updateMetadata('title', (e.currentTarget as HTMLInputElement).value)} />
+            </div>
+            <div class="field">
+              <label for="meta-description">Description</label>
+              <textarea id="meta-description" class="textarea" value={edit.metadata.description} oninput={(e) => updateMetadata('description', (e.currentTarget as HTMLTextAreaElement).value)}></textarea>
+            </div>
+            <div class="field">
+              <label for="meta-tags">Hashtags</label>
+              <input id="meta-tags" class="input" value={(edit.metadata.hashtags || []).join(' ')} oninput={(e) => updateMetadata('hashtags', (e.currentTarget as HTMLInputElement).value.split(/\s+/).filter(Boolean))} />
+            </div>
+            <div class="notice">AI-generated text is a draft. It is never burned into the video or presented as the speaker's words.</div>
+          </div>
+        </div>
+
+        <div class="card tight">
+          <div class="spread" style="margin-bottom:10px">
+            <h3>Export</h3>
+            <span class="pill">1080 × 1920 · H.264</span>
+          </div>
+          <div class="form-grid">
+            <div class="field wide">
+              <label for="studio-output">Output folder</label>
+              <div class="row">
+                <input id="studio-output" class="input mono" readonly value={outputDir} />
+                <Button variant="ghost" size="sm" onclick={chooseOutput}><Icon name="folder" size={13} /> Choose</Button>
+              </div>
+            </div>
+            <div class="field">
+              <label for="quality">Quality</label>
+              <select id="quality" class="select" value={quality} onchange={(e) => { quality = (e.currentTarget as HTMLSelectElement).value as any; request('settings.set', { key: 'render', value: { quality } }) }}>
+                <option value="standard">Standard · fast</option>
+                <option value="high">High · slower</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="naming">File name</label>
+              <input id="naming" class="input mono" value={filenameTemplate} oninput={(e) => { filenameTemplate = (e.currentTarget as HTMLInputElement).value; request('settings.set', { key: 'render', value: { filenameTemplate } }) }} />
+            </div>
+            <label class="check wide">
+              <input type="checkbox" checked={preferHardware} onchange={(e) => { preferHardware = (e.currentTarget as HTMLInputElement).checked; request('settings.set', { key: 'render', value: { preferHardware } }) }} />
+              <span>Use a hardware encoder when a test encode succeeds; otherwise fall back to libx264.</span>
+            </label>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <Button variant="primary" onclick={() => startRender(selections.map((s) => s.id))} disabled={activeJob && ['queued','running','waiting_rate_limit'].includes(activeJob.state)}>
+              <Icon name="download" size={15} /> Export all {selections.length}
+            </Button>
+            <span class="tiny muted">A clip is only marked successful after ffprobe validates resolution, codec, duration and audio.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="studio-controls">
+        <div class="control-group">
+          <div class="spread" style="margin-bottom:10px">
+            <h3><Icon name="spark" size={16} /> Preset</h3>
+            <select class="select" style="width:190px" onchange={(e) => applyPreset((e.currentTarget as HTMLSelectElement).value)}>
+              <option value="">Apply preset…</option>
+              {#each presets as preset}<option value={preset.id}>{preset.name}</option>{/each}
+            </select>
+          </div>
+          <div class="seg">
+            {#each [{ id: 'fill', label: 'Fill 9:16' }, { id: 'blur', label: 'Blur fit' }, { id: 'manual', label: 'Manual' }] as layout}
+              <button class={edit.framing.layout === layout.id ? 'active' : ''} onclick={() => update('framing', 'layout', layout.id)}>{layout.label}</button>
+            {/each}
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label for="zoom">Static zoom · {edit.framing.zoom.toFixed(2)}×</label>
+            <input id="zoom" class="range" type="range" min="1" max="1.6" step="0.02" value={edit.framing.zoom} oninput={(e) => update('framing', 'zoom', Number((e.currentTarget as HTMLInputElement).value))} />
+          </div>
+          <p class="tiny muted">Face tracking is not enabled in this build. The crop stays centered so the frame remains calm.</p>
+        </div>
+
+        <div class="control-group">
+          <div class="spread">
+            <h3><Icon name="text" size={16} /> Subtitles</h3>
+            <label class="check"><input type="checkbox" checked={edit.subtitles.enabled} onchange={(e) => update('subtitles', 'enabled', (e.currentTarget as HTMLInputElement).checked)} /><span>On</span></label>
+          </div>
+          <div class="form-grid" style="margin-top:12px">
+            <div class="field">
+              <label for="font-size">Size · {edit.subtitles.fontSize}px</label>
+              <input id="font-size" class="range" type="range" min="42" max="92" step="2" value={edit.subtitles.fontSize} oninput={(e) => update('subtitles', 'fontSize', Number((e.currentTarget as HTMLInputElement).value))} />
+            </div>
+            <div class="field">
+              <label for="position">Position</label>
+              <select id="position" class="select" value={edit.subtitles.position} onchange={(e) => update('subtitles', 'position', (e.currentTarget as HTMLSelectElement).value)}>
+                <option value="lower_third">Lower third (safe)</option>
+                <option value="bottom">Bottom</option>
+                <option value="center">Center</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Text colour</label>
+              <div class="swatch-row">
+                {#each ['#FFFFFF', '#F7E8C3', '#7FD1C1', '#FFD4DA', '#C9A7FF'] as color}
+                  <button class={`swatch ${edit.subtitles.color === color ? 'active' : ''}`} style={`background:${color}`} title={color} onclick={() => update('subtitles', 'color', color)}></button>
+                {/each}
+              </div>
+            </div>
+            <div class="field">
+              <label>Highlight colour</label>
+              <div class="swatch-row">
+                {#each ['#E8C77B', '#FF9A6F', '#7FD1C1', '#C9A7FF', '#FFFFFF'] as color}
+                  <button class={`swatch ${edit.subtitles.highlightColor === color ? 'active' : ''}`} style={`background:${color}`} title={color} onclick={() => update('subtitles', 'highlightColor', color)}></button>
+                {/each}
+              </div>
+            </div>
+            <div class="field">
+              <label for="outline">Outline · {edit.subtitles.outline}</label>
+              <input id="outline" class="range" type="range" min="0" max="8" step="1" value={edit.subtitles.outline} oninput={(e) => update('subtitles', 'outline', Number((e.currentTarget as HTMLInputElement).value))} />
+            </div>
+            <div class="field">
+              <label for="max-lines">Max lines</label>
+              <select id="max-lines" class="select" value={edit.subtitles.maxLines} onchange={(e) => update('subtitles', 'maxLines', Number((e.currentTarget as HTMLSelectElement).value))}>
+                <option value={1}>1 line</option>
+                <option value={2}>2 lines</option>
+              </select>
+            </div>
+            <label class="check wide"><input type="checkbox" checked={edit.subtitles.uppercase} onchange={(e) => update('subtitles', 'uppercase', (e.currentTarget as HTMLInputElement).checked)} /><span>Uppercase</span></label>
+            <label class="check wide"><input type="checkbox" checked={edit.subtitles.background} onchange={(e) => update('subtitles', 'background', (e.currentTarget as HTMLInputElement).checked)} /><span>Background box</span></label>
+          </div>
+          {#if transcript?.wordTiming === 'approximate'}
+            <div class="notice warn" style="margin-top:10px">Word timing is approximate, so the Studio highlights whole phrases instead of pretending to know each word's exact frame.</div>
+          {/if}
+        </div>
+
+        <div class="control-group">
+          <h3><Icon name="film" size={16} /> Effects</h3>
+          <div class="stack">
+            <label class="check"><input type="checkbox" checked={edit.effects.fade} onchange={(e) => update('effects', 'fade', (e.currentTarget as HTMLInputElement).checked)} /><span>Short fade in and out</span></label>
+            <label class="check"><input type="checkbox" checked={edit.effects.progressBar} onchange={(e) => update('effects', 'progressBar', (e.currentTarget as HTMLInputElement).checked)} /><span>Progress bar</span></label>
+            <label class="check"><input type="checkbox" checked={edit.effects.cinematic} onchange={(e) => update('effects', 'cinematic', (e.currentTarget as HTMLInputElement).checked)} /><span>Mild cinematic contrast and vignette</span></label>
+            <p class="tiny muted">Defaults are restrained. The Minimal preset turns all of this off.</p>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <h3><Icon name="volume" size={16} /> Audio</h3>
+          <div class="stack">
+            <div class="field">
+              <label for="loudness">Loudness target · {edit.audio.loudnessTarget} LUFS</label>
+              <input id="loudness" class="range" type="range" min="-24" max="-10" step="0.5" value={edit.audio.loudnessTarget} oninput={(e) => update('audio', 'loudnessTarget', Number((e.currentTarget as HTMLInputElement).value))} />
+            </div>
+            <label class="check"><input type="checkbox" checked={edit.audio.voiceEnhance} onchange={(e) => update('audio', 'voiceEnhance', (e.currentTarget as HTMLInputElement).checked)} /><span>Gentle voice enhancement (EQ + light compression)</span></label>
+            <label class="check"><input type="checkbox" checked={edit.audio.denoise} onchange={(e) => update('audio', 'denoise', (e.currentTarget as HTMLInputElement).checked)} /><span>Noise reduction</span></label>
+            <div class="field">
+              <label>Background music (optional)</label>
+              <div class="row">
+                <input class="input mono" readonly value={edit.audio.musicPath || ''} placeholder="No music" />
+                <Button size="sm" variant="ghost" onclick={chooseMusic}><Icon name="folder" size={13} /> Choose</Button>
+                {#if edit.audio.musicPath}<button class="link tiny" onclick={() => update('audio', 'musicPath', null)}>Remove</button>{/if}
+              </div>
+            </div>
+            <p class="tiny muted">Two-pass loudnorm, true-peak limiting and sidechain ducking when music is present. Pauses, laughter and applause are preserved.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {#if activeJob && ['queued', 'running', 'waiting_rate_limit', 'cancelling'].includes(activeJob.state)}
+      <div class="card tight">
+        <div class="spread">
+          <div class="row">
+            <Icon name="loader" size={16} />
+            <div>
+              <div class="small" style="font-weight:600">{activeJob.progress?.message || 'Rendering…'}</div>
+              <div class="tiny muted">{activeJob.progress?.stage || activeJob.stage}</div>
+            </div>
+          </div>
+          <div class="row">
+            <span class="mono">{Math.round((activeJob.progress?.fraction || 0) * 100)}%</span>
+            <Button size="sm" variant="ghost" onclick={cancelRender}>Cancel</Button>
+          </div>
+        </div>
+        <div class="progress" style="margin-top:10px"><span style={`width:${Math.max(3, (activeJob.progress?.fraction || 0) * 100)}%`}></span></div>
+      </div>
+    {/if}
+
+    {#if renderError}
+      <div class="notice error">
+        {renderError}
+        <div class="row" style="margin-top:8px">
+          {#if activeJob && ['interrupted', 'failed'].includes(activeJob.state)}<Button size="sm" variant="ghost" onclick={resumeRender}>Resume render</Button>{/if}
+          <button class="link tiny" onclick={() => (renderError = null)}>Dismiss</button>
+        </div>
+      </div>
+    {/if}
+
+    <div class="card tight">
+      <div class="spread" style="margin-bottom:10px">
+        <h3>Export queue</h3>
+        <span class="tiny muted">{exportsQueue.length} item{exportsQueue.length === 1 ? '' : 's'}</span>
+      </div>
+      {#if exportsQueue.length}
+        <table class="table">
+          <thead><tr><th>File</th><th>State</th><th>Checks</th><th></th></tr></thead>
+          <tbody>
+            {#each exportsQueue as item (item.id)}
+              <tr>
+                <td class="mono tiny" style="max-width:360px;overflow:hidden;text-overflow:ellipsis">{item.outputPath.split(/[\\/]/).pop()}</td>
+                <td><span class={`pill ${item.state === 'succeeded' ? 'success' : item.state === 'failed' ? 'danger' : ''}`}>{item.state}</span></td>
+                <td class="tiny muted">{item.ffprobe?.ok ? `${item.ffprobe.width}×${item.ffprobe.height} · ${item.ffprobe.codec}` : (item.error || '—')}</td>
+                <td style="text-align:right">
+                  {#if item.state === 'succeeded'}<button class="link tiny" onclick={() => showFile(item.outputPath)}>Show file</button>{/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <p class="small muted">No exports yet. Start one above; the queue records each validation result.</p>
+      {/if}
+    </div>
+  </div>
+{/if}

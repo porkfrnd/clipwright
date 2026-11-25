@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Verify a packaged Linux build without relying on system Python, Node or FFmpeg.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP="${1:-$ROOT/apps/desktop/release/linux-unpacked}"
+ENGINE="$APP/resources/engine/shorts-engine"
+RES="$APP/resources/resources"
+EMPTY="$(mktemp -d)"
+DATA="$(mktemp -d)"
+trap 'rm -rf "$EMPTY" "$DATA"' EXIT
+
+test -x "$APP/clipwright" || { echo "missing packaged app: $APP/clipwright" >&2; exit 1; }
+test -x "$ENGINE" || { echo "missing frozen engine: $ENGINE" >&2; exit 1; }
+for bin in ffmpeg ffprobe yt-dlp deno; do
+  test -x "$RES/bin/linux-x64/$bin" || { echo "missing bundled binary: $bin" >&2; exit 1; }
+done
+
+echo "== bundled binaries (empty PATH) =="
+PATH="$EMPTY" "$RES/bin/linux-x64/ffmpeg" -hide_banner -version | head -1
+PATH="$EMPTY" "$RES/bin/linux-x64/ffprobe" -version | head -1
+PATH="$EMPTY" "$RES/bin/linux-x64/yt-dlp" --version
+PATH="$EMPTY" "$RES/bin/linux-x64/deno" --version | head -1
+
+echo "== frozen engine handshake =="
+CLIPWRIGHT_ENGINE="$ENGINE" CLIPWRIGHT_RES="$RES" CLIPWRIGHT_DATA="$DATA" python3 - <<'PY'
+import json, os, subprocess
+proc = subprocess.Popen(
+    [os.environ["CLIPWRIGHT_ENGINE"], "--stdio"],
+    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    text=True,
+    env={**os.environ, "CLIPWRIGHT_RESOURCES": os.environ["CLIPWRIGHT_RES"], "CLIPWRIGHT_DATA_DIR": os.environ["CLIPWRIGHT_DATA"]},
+)
+def request(method, params):
+    proc.stdin.write(json.dumps({"v": 1, "id": method, "method": method, "params": params}) + "\n")
+    proc.stdin.flush()
+    while True:
+        line = proc.stdout.readline()
+        if not line:
+            raise SystemExit(f"engine closed before {method}")
+        msg = json.loads(line)
+        if msg.get("id") == method:
+            return msg
+for method, params in (("engine.hello", {"protocolVersion": 1, "appVersion": "verify"}), ("engine.ping", {}), ("binaries.status", {})):
+    msg = request(method, params)
+    if msg.get("error"):
+        raise SystemExit(f"{method}: {msg['error']}")
+    print(method, "ok")
+proc.stdin.close()
+proc.wait(timeout=20)
+PY
+
+echo "== packaged app files =="
+test -f "$APP/resources/app.asar"
+du -sh "$APP"
+du -sh "$APP/resources/engine" "$RES/bin" "$APP/resources/app.asar"
+echo "Package verification complete."

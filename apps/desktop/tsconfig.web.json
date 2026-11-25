@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/renderer/src/lib/*"],
+      "$components/*": ["src/renderer/src/components/*"],
+      "$routes/*": ["src/renderer/src/routes/*"],
+      "$shared/*": ["src/shared/*"]
+    },
+    "types": ["svelte", "vite/client"]
+  },
+  "include": ["src/renderer/src/**/*.ts", "src/renderer/src/**/*.d.ts", "src/shared/**/*.ts"]
+}

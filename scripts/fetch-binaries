@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Download the platform binaries the packaged app needs.
+#
+# Every file is pinned by SHA-256 in resources/bin/MANIFEST.json. Downloads go to
+# a temporary file, are verified, then atomically renamed. Nothing is executed
+# from an unverified download.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PLATFORM="${CLIPWRIGHT_PLATFORM:-linux-x64}"
+DEST="$ROOT/resources/bin/$PLATFORM"
+MANIFEST="$ROOT/resources/bin/MANIFEST.json"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$DEST"
+
+python3 - "$MANIFEST" "$PLATFORM" <<'PY' > "$TMP/plan.tsv"
+import json, sys
+manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+platform = sys.argv[2]
+for item in manifest["platforms"].get(platform, []):
+    print("\t".join([item["name"], item["url"], item["sha256"], item.get("downloadSha256", item["sha256"]), item.get("archive", ""), item.get("member", "")]))
+PY
+
+if [ ! -s "$TMP/plan.tsv" ]; then
+  echo "No binary plan for $PLATFORM in $MANIFEST" >&2
+  exit 1
+fi
+
+verify() {
+  local file="$1" expected="$2"
+  local actual
+  actual="$(sha256sum "$file" | awk '{print $1}')"
+  if [ "$actual" != "$expected" ]; then
+    echo "Checksum mismatch for $file: $actual != $expected" >&2
+    exit 1
+  fi
+}
+
+while IFS=$'\t' read -r name url sha download_sha archive member; do
+  target="$DEST/$name"
+  if [ -f "$target" ] && [ "$(sha256sum "$target" | awk '{print $1}')" = "$sha" ]; then
+    echo "ok       $name (already verified)"
+    continue
+  fi
+  echo "download $name"
+  fetched="$TMP/$name.download"
+  curl -L --fail --retry 3 --retry-delay 2 -o "$fetched" "$url"
+  verify "$fetched" "$download_sha"
+  if [ -n "$archive" ]; then
+    case "$archive" in
+      tar.xz) tar -xJf "$fetched" -C "$TMP" ;;
+      zip) unzip -q -o "$fetched" -d "$TMP" ;;
+      *) echo "unknown archive $archive" >&2; exit 1 ;;
+    esac
+    src="$TMP/$member"
+    if [ ! -f "$src" ]; then
+      echo "archive member not found: $member" >&2
+      exit 1
+    fi
+    install -m 0755 "$src" "$target.part"
+  else
+    install -m 0755 "$fetched" "$target.part"
+  fi
+  mv "$target.part" "$target"
+  echo "verified $name"
+done < "$TMP/plan.tsv"
+
+echo "Binaries ready in $DEST"
+ls -lh "$DEST"

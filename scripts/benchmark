@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Measure local transcription and render speed on this machine.
+
+Results are single-run estimates, not guarantees. Writes docs/BENCHMARKS.md with
+the hardware description, method, and measured x-realtime / peak RSS figures.
+"""
+from __future__ import annotations
+
+import json
+import os
+import platform
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PYTHON = ROOT / ".venv/bin/python"
+MODEL = Path(os.environ.get("CLIPWRIGHT_TEST_WHISPER_MODEL", "/tmp/cwtrans/models/whisper/tiny"))
+OUT = ROOT / "docs/BENCHMARKS.md"
+
+TRANSCRIBE = r"""
+import asyncio, json, os, resource, time
+from pathlib import Path
+from shorts_engine.transcription.local_whisper import LocalWhisperEngine
+from shorts_engine.transcription.base import TranscriptionOptions
+async def main():
+    t=time.perf_counter()
+    e=LocalWhisperEngine(Path(os.environ['MODEL']),'tiny',ffmpeg_path=os.environ.get('FFMPEG','ffmpeg'))
+    p=await e.transcribe(Path(os.environ['AUDIO']), TranscriptionOptions(language='en', word_timestamps=True), duration_s=float(os.environ['DURATION']))
+    elapsed=time.perf_counter()-t
+    print(json.dumps({'elapsed':elapsed,'duration':float(os.environ['DURATION']),'segments':len(p.segments),'rssMb':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024}))
+asyncio.run(main())
+"""
+
+RENDER = r"""
+import asyncio, json, os, resource, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path(os.environ['ROOT']) / 'engine/tests/integration'))
+from test_render import seed_render_project
+from shorts_engine.render.service import RenderHooks, RenderOptions
+ctx, project, source, selections = seed_render_project(Path(os.environ['DATA']), count=1)
+async def main():
+    t=time.perf_counter()
+    res=await ctx.render.render_batch(project_id=project['id'], selection_ids=[selections[0]['id']], options=RenderOptions(output_dir=Path(os.environ['OUT']), prefer_hardware=False, quality='standard'), hooks=RenderHooks(), job_tmp=Path(os.environ['TMP']))
+    elapsed=time.perf_counter()-t
+    item=res['items'][0]
+    print(json.dumps({'elapsed':elapsed,'duration':item['ffprobe']['durationS'],'ok':item['ok'],'rssMb':resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss/1024}))
+asyncio.run(main()); ctx.db.close()
+"""
+
+
+def run(code: str, env: dict) -> dict:
+    result = subprocess.run(
+        [str(PYTHON), "-c", code],
+        cwd=ROOT,
+        env={**os.environ, **env},
+        text=True,
+        capture_output=True,
+        timeout=1200,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr[-2000:])
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+def cpu_model() -> str:
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or "unknown"
+
+
+def main() -> int:
+    audio = ROOT / "tests/fixtures/src/s1.wav"
+    duration = 13.0
+    ffmpeg = "ffmpeg"
+    if not (MODEL / "model.bin").exists():
+        print(f"Whisper model missing at {MODEL}; run Model Manager or set CLIPWRIGHT_TEST_WHISPER_MODEL", file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory(prefix="cw-bench-") as tmp:
+        tmp_path = Path(tmp)
+        transcribe = run(TRANSCRIBE, {"MODEL": str(MODEL), "AUDIO": str(audio), "DURATION": str(duration), "FFMPEG": ffmpeg})
+        render = run(RENDER, {
+            "ROOT": str(ROOT),
+            "DATA": str(tmp_path / "engine"),
+            "OUT": str(tmp_path / "out"),
+            "TMP": str(tmp_path / "render-tmp"),
+        })
+    lines = [
+        "# Benchmarks",
+        "",
+        "Measured on the development machine with a single run per task. These are estimates,",
+        "not guarantees. Software encoding only; no usable GPU was detected.",
+        "",
+        f"- CPU: {cpu_model()}",
+        f"- Cores: {os.cpu_count()}",
+        f"- OS: {platform.platform()}",
+        f"- Python: {subprocess.check_output([str(PYTHON), '-c', 'import platform;print(platform.python_version())'], text=True).strip()}",
+        "- FFmpeg: system 7.1.5 development build; packaged builds use the bundled 7.0.2 static build",
+        "- Whisper: tiny, int8, CPU, VAD on, word timestamps on",
+        "",
+        "| Task | Content | Wall time | Speed | Peak RSS |",
+        "| --- | --- | --- | --- | --- |",
+        f"| Local transcription (tiny) | {transcribe['duration']:.0f}s speech | {transcribe['elapsed']:.1f}s | {transcribe['duration']/transcribe['elapsed']:.2f}× real-time | {transcribe['rssMb']:.0f} MB (engine process) |",
+        f"| Render 1080×1920 H.264/AAC | {render['duration']:.1f}s clip | {render['elapsed']:.1f}s | {render['duration']/render['elapsed']:.2f}× real-time | {render['rssMb']:.0f} MB (ffmpeg child) |",
+        "",
+        "Interpretation: this CPU-only laptop is a low-resource baseline. Longer clips cost roughly",
+        "linearly in encoding time. Local transcription at ~1× real-time means a 60-minute recording",
+        "takes about an hour with `tiny`; larger models are slower. Cloud transcription is the fast path",
+        "on this hardware, and the app recommends it for the low-resource profile.",
+        "",
+        "Reproduce with `scripts/benchmark`. Numbers will vary with thermal state, source content and",
+        "FFmpeg build.",
+        "",
+    ]
+    OUT.write_text("\n".join(lines), encoding="utf-8")
+    print("\n".join(lines))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

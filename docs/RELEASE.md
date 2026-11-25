@@ -1,0 +1,174 @@
+# Release
+
+## Artifacts (this build)
+
+Built on 2026-11-24 with Electron 45.4.1, electron-builder 26.18.0, PyInstaller on Python
+3.12.12, bundled FFmpeg 7.0.2, yt-dlp 2026.10.26 and Deno 2.9.8.
+
+| Artifact | Size | SHA-256 |
+| --- | --- | --- |
+| `release/Clipwright-0.1.0-x86_64.AppImage` | 481 MiB | `b6c39c891f835d426eb62465e75be04b87b5c00230016ab8fed6790269a8b290` |
+| `release/Clipwright-0.1.0-amd64.deb` | 390 MiB | `ce22856274616ae88264879ff5fc5750347acb91e46ac6c1152da1211257677b` |
+| `release/linux-unpacked/` | 1.3 GiB | directory |
+
+Breakdown of the unpacked app:
+
+| Part | Size |
+| --- | --- |
+| Frozen engine (`resources/engine`, onedir) | 682 MB |
+| Bundled binaries (`resources/resources/bin`) | 284 MB |
+| Renderer/main bundle (`app.asar`) | 9.6 MB |
+
+The AppImage/deb contain Electron + the CPU engine + FFmpeg/ffprobe + yt-dlp + Deno + fonts +
+the `llama-cpp-python` runtime used by local AI. Whisper models, the Qwen3 0.6B GGUF, the
+YuNet model and a CUDA pack are **not** bundled; they download on demand into the user data
+directory with size shown before download. The local AI runtime is ~30 MB; the model is
+610 MiB and explicitly opt-in.
+
+## Build from source
+
+Prerequisites: Linux x64, Node ≥ 22, Python ≥ 3.11 (3.12 recommended), network for the first
+dependency/binary fetch, a C/C++ toolchain for `llama-cpp-python` when no wheel is available,
+and a working display for the UI tests.
+
+```bash
+# 1. Python engine
+python3.12 -m venv .venv
+.venv/bin/pip install -e "engine[dev]"
+.venv/bin/pip install pyinstaller pillow
+
+# 2. Desktop dependencies
+cd apps/desktop
+npm ci
+
+# 3. Pinned external binaries (verifies manifest SHA-256)
+cd ../..
+./scripts/fetch-binaries
+
+# 4. Generated brand/schemas
+./scripts/gen-brand
+./scripts/gen-schemas
+
+# 5. Tests and builds
+cd engine && ../.venv/bin/python -m pytest -q && cd ..
+./scripts/build-engine
+cd apps/desktop
+npm run typecheck
+npm test
+npm run dist:linux
+```
+
+`npm run dist:linux` writes AppImage, `.deb` and `linux-unpacked/` under
+`apps/desktop/release/`. `scripts/verify-package` checks the packaged binaries with an empty
+`PATH`, runs the frozen engine handshake and reports sizes.
+
+The engine can be used without Electron:
+
+```bash
+.venv/bin/python -m shorts_engine --stdio       # NDJSON protocol
+.venv/bin/python -m shorts_engine run-job transcription --params '{...}' --data-dir /tmp/cw
+```
+
+## Run
+
+```bash
+chmod +x Clipwright-0.1.0-x86_64.AppImage
+./Clipwright-0.1.0-x86_64.AppImage
+
+# or
+sudo apt install ./Clipwright-0.1.0-amd64.deb
+clipwright
+```
+
+Data (SQLite, models, assets, outputs, logs) lives in
+`~/.local/share/clipwright` by default, or in the Electron user-data directory used by the
+packaged app. It is outside the install directory. The output folder is configurable.
+
+## Runtime troubleshooting
+
+- **AppImage FUSE error:** run with `APPIMAGE_EXTRACT_AND_RUN=1`, install the `.deb`, or use
+  `linux-unpacked/clipwright`. The AppImage runtime, not the app, needs FUSE.
+- **Engine failed to start:** press **Restart engine** on the screen; inspect
+  `~/.config/Clipwright/logs/main.log` and `engine-stderr.log`. The boot screen shows the log
+  tail. The supervisor resets its restart budget on a manual restart.
+- **URL preview failure:** Clipwright caches previews, retries with fresh extraction and
+  alternate YouTube clients, and prefers system FFmpeg for network downloads. For videos that
+  require sign-in, use **Settings → Downloads → YouTube cookies**. Otherwise update the
+  downloader or import the file locally.
+
+## Clean-machine evidence
+
+- The **unpacked packaged app** completed the full Playwright flow with `PATH=/tmp/emptybin`:
+  wizard → local import → real tiny Whisper transcription → stub provider → analysis →
+  selection → boundary edit/undo → Studio → real FFmpeg export → validation and security
+  assertions. It passed in ~1 minute. No system Python, Node, FFmpeg or yt-dlp was on
+  `PATH`.
+- `scripts/verify-package` launched the bundled FFmpeg/ffprobe/yt-dlp/Deno with an empty
+  `PATH` and completed the frozen-engine `hello`/`ping`/`binaries.status` handshake.
+- The packaged app was launched by Playwright with an isolated user-data directory;
+  `binaries.status` reported the bundled tools and `hardware.detect` reported the expected
+  low-resource profile.
+- The AppImage itself was started with `APPIMAGE_EXTRACT_AND_RUN=1` and stayed alive for the
+  15 s probe. Playwright cannot attach through the AppImage extraction wrapper in this
+  environment, so the full UI flow was run against the identical `linux-unpacked` payload.
+- **Windows and macOS were not built or tested here.** Linux-specific clean-install evidence
+  is strong; Windows requires its own VM/build/signing pass.
+
+## Signing and distribution
+
+- **Linux**: AppImage can be signed with a GPG key and the `.deb` can be signed with
+  `debsign`. No signing key is configured in this build; unsigned artifacts trigger the
+  usual OS/desktop warnings.
+- **Windows**: code signing requires an Authenticode certificate. `electron-builder` NSIS
+  config exists, but no Windows artifact was produced or signed.
+- **macOS**: out of scope. No signing/notarization.
+- **Updates**: `electron-updater` is present but no publish provider/update feed is
+  configured. Updates are manual in this build; yt-dlp has an explicit checksum-verified
+  update action. Never enable silent updates without a visible setting and signed feed.
+
+## Licenses and FFmpeg GPL
+
+Clipwright is MIT (`LICENSE`). The bundled FFmpeg is a **GPL-2.0-or-later** static build with
+libx264/libass and is invoked as a separate process. `THIRD_PARTY_LICENSES.md` is generated by
+`scripts/licenses` and lists:
+
+- FFmpeg/ffprobe, yt-dlp, Deno, Electron/Chromium/Node,
+- bundled OFL fonts and their license texts,
+- Whisper and YuNet model licenses and pinned revisions,
+- every npm package in the lockfile and every installed Python distribution.
+
+Before commercial redistribution: perform a legal review of GPL compliance, provide the
+corresponding FFmpeg source offer, verify the licenses of frozen Python wheels, and keep all
+license texts with the installer. `scripts/licenses` is an inventory, not legal advice.
+
+## Release checklist
+
+- [x] Engine unit + integration suite passes (92 passed, 1 skipped).
+- [x] Desktop typecheck and Vitest pass (21 tests).
+- [x] Playwright dev flow passes (1 long test, including boundary undo).
+- [x] Packaged unpacked app passes the same flow with an empty `PATH`.
+- [x] Frozen engine URL metadata import against a real YouTube URL.
+- [x] Packaged URL preview (H.264 640×360) after the FFmpeg/network fix.
+- [x] Packaged URL preview cache hit and real 1080×1920 URL render with burned-in subtitles.
+- [x] Studio subtitle overlay at the first frame of a URL clip (absolute/relative clock fixed).
+- [x] Existing YouTube captions imported when available; partial caption downloads survive a second-language 429.
+- [x] Compare modal loads distinct, correctly offset previews for both URL candidates.
+- [x] Packaged Settings `binaries.status` ~80 ms (bundled version read from MANIFEST).
+- [x] Local-LLM install auto-activates the keyless local provider; Settings shows it with no Key button.
+- [x] Adjacent transcript windows are batched (default 2) with overlap de-duplication; provider token headers are not double-counted.
+- [x] Model Manager **Verify** on the real installed tiny Whisper model succeeds (installed model IDs exposed in `models.list`); regression covered by packaged Playwright.
+- [x] Studio subtitle overlay is inside the 9:16 frame and paints above the blur foreground.
+- [x] Burned ASS captions wrap into at most two 24-character rows; no text outside the video frame.
+- [x] Engine-failure boot screen recovers via Restart engine; renderer reload during an engine restart clears automatically.
+- [x] Frozen engine `run-job transcription` and `run-job render` smoke tests.
+- [x] Frozen engine local Qwen3 0.6B loaded and answered a JSON probe in 3.6–6.7 s; real metadata generation produced schema-valid output.
+- [x] Real local `find_moments` returned a schema-valid candidate after segment-ID normalization (88.5 s / 1,547 tokens on CPU).
+- [x] Model Manager lists the Qwen GGUF and its streaming SHA-256 download path is exercised with a local HTTP fixture; **Use for AI** creates a keyless local provider and makes it default. The real 610 MiB GGUF was loaded from a local copy, not downloaded through the UI.
+- [x] `scripts/verify-package` passes.
+- [x] `scripts/benchmark` writes measured numbers to `docs/BENCHMARKS.md`.
+- [x] Screenshot set re-captured from real Electron windows, all themes/states.
+- [x] `THIRD_PARTY_LICENSES.md` generated and `LICENSE` present.
+- [ ] Live Groq AI tests (blocked: no key).
+- [ ] Windows build + clean Windows VM test (blocked: no Windows host).
+- [ ] Code signing / notarization (requires certificates).
+- [ ] Human legal review of GPL redistribution.

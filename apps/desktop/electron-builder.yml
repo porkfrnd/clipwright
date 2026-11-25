@@ -1,0 +1,58 @@
+appId: com.clipwright.desktop
+productName: Clipwright
+copyright: Copyright © 2026 Clipwright contributors
+directories:
+  output: release
+  buildResources: ../../resources
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: ../../resources
+    to: resources
+    filter:
+      - "**/*"
+  - from: ../../engine/dist/shorts-engine
+    to: engine
+    filter:
+      - "**/*"
+asar: true
+asarUnpack:
+  - resources/**
+linux:
+  target:
+    - AppImage
+    - deb
+  category: AudioVideo
+  icon: ../../resources/icons/icon.png
+  executableName: clipwright
+  synopsis: Find the moments first, then make Shorts
+  maintainer: Clipwright contributors <maintainers@clipwright.invalid>
+  syncDesktopName: true
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+appImage:
+  artifactName: "${productName}-${version}-${arch}.AppImage"
+deb:
+  artifactName: "${productName}-${version}-${arch}.deb"
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: ../../resources/icons/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  artifactName: "${productName}-Setup-${version}.${ext}"
+mac:
+  target: []

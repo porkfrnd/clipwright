@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Build the standalone engine (PyInstaller onedir). Run from any directory.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${PYTHON:-$ROOT/.venv/bin/python}"
+OUT="$ROOT/engine/dist"
+WORK="$ROOT/engine/build/pyinstaller"
+rm -rf "$OUT/shorts-engine" "$WORK"
+"$PY" -m PyInstaller \
+  --noconfirm --clean --onedir --console \
+  --name shorts-engine \
+  --distpath "$OUT" \
+  --workpath "$WORK" \
+  --specpath "$ROOT/engine/build" \
+  --paths "$ROOT/engine" \
+  --collect-all faster_whisper \
+  --collect-all ctranslate2 \
+  --collect-all tokenizers \
+  --collect-all huggingface_hub \
+  --collect-all yt_dlp \
+  --collect-all cv2 \
+  --collect-all numpy \
+  --collect-all llama_cpp \
+  --collect-submodules av \
+  --copy-metadata faster-whisper \
+  --copy-metadata ctranslate2 \
+  --copy-metadata tokenizers \
+  --copy-metadata huggingface-hub \
+  --copy-metadata llama-cpp-python \
+  --copy-metadata yt-dlp \
+  --hidden-import shorts_engine \
+  "$ROOT/engine/entrypoint.py"
+# The engine's resource lookups expect <resources>/bin/linux-x64 and fonts next to the app.
+# electron-builder copies those resources; the binary itself is self-contained.
+test -x "$OUT/shorts-engine/shorts-engine"
+"$OUT/shorts-engine/shorts-engine" --version || true
+du -sh "$OUT/shorts-engine"

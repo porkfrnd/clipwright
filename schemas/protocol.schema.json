@@ -1,0 +1,1280 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Clipwright engine protocol v1",
+  "protocolVersion": 1,
+  "methods": {
+    "analysis.estimate": "AnalysisEstimateParams",
+    "analysis.list": "AnalysisListParams",
+    "analysis.start": "AnalysisStartParams",
+    "binaries.status": "Empty",
+    "binaries.update": "BinariesUpdateParams",
+    "candidates.list": "CandidatesListParams",
+    "candidates.rename": "CandidateRenameParams",
+    "candidates.revisions": "CandidateIdParams",
+    "candidates.set_status": "CandidateStatusParams",
+    "candidates.undo": "CandidateIdParams",
+    "candidates.update_bounds": "CandidateUpdateBoundsParams",
+    "diagnostics.export": "Empty",
+    "edit.get": "SelectionIdParams",
+    "edit.set": "EditSetParams",
+    "engine.hello": "HelloParams",
+    "engine.ping": "Empty",
+    "engine.shutdown": "Empty",
+    "hardware.detect": "Empty",
+    "jobs.cancel": "JobIdParams",
+    "jobs.get": "JobIdParams",
+    "jobs.list": "JobsListParams",
+    "jobs.resume": "JobIdParams",
+    "media.resolve": "MediaResolveParams",
+    "metadata.generate": "MetadataGenerateParams",
+    "models.delete": "ModelIdParams",
+    "models.download": "ModelDownloadParams",
+    "models.list": "Empty",
+    "models.verify": "ModelIdParams",
+    "preset.delete": "PresetDeleteParams",
+    "preset.list": "Empty",
+    "preset.save": "PresetSaveParams",
+    "privacy.clear": "Empty",
+    "privacy.log": "Empty",
+    "project.create": "ProjectCreateParams",
+    "project.delete": "ProjectIdParams",
+    "project.list": "Empty",
+    "project.open": "ProjectIdParams",
+    "project.rename": "ProjectRenameParams",
+    "provider.delete": "ProviderIdParams",
+    "provider.list": "Empty",
+    "provider.list_models": "ProviderModelsParams",
+    "provider.save": "ProviderSaveParams",
+    "provider.test": "ProviderTestParams",
+    "render.queue": "RenderQueueParams",
+    "render.start": "RenderStartParams",
+    "selection.list": "SelectionListParams",
+    "selection.set": "SelectionSetParams",
+    "settings.get": "SettingsGetParams",
+    "settings.set": "SettingsSetParams",
+    "source.fetch_preview": "FetchPreviewParams",
+    "source.get": "SourceIdParams",
+    "source.import_file": "ImportFileParams",
+    "source.import_url": "ImportUrlParams",
+    "source.preview": "SourceIdParams",
+    "source.probe": "SourceIdParams",
+    "source.set_authorization": "SourceAuthorizationParams",
+    "transcript.get": "TranscriptGetParams",
+    "transcript.list": "AnalysisListParams",
+    "transcription.start": "TranscriptionStartParams"
+  },
+  "$defs": {
+    "AnalysisEstimateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "providerProfileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Providerprofileid"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "title": "AnalysisEstimateParams",
+      "type": "object"
+    },
+    "AnalysisListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "title": "AnalysisListParams",
+      "type": "object"
+    },
+    "AnalysisStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "providerProfileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Providerprofileid"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "transcriptId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcriptid"
+        },
+        "options": {
+          "additionalProperties": true,
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "title": "AnalysisStartParams",
+      "type": "object"
+    },
+    "Empty": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "BinariesUpdateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "default": "stable",
+          "enum": [
+            "stable",
+            "nightly"
+          ],
+          "title": "Channel",
+          "type": "string"
+        }
+      },
+      "title": "BinariesUpdateParams",
+      "type": "object"
+    },
+    "CandidatesListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "runId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runid"
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "title": "CandidatesListParams",
+      "type": "object"
+    },
+    "CandidateRenameParams": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "title": "Candidateid",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 140,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidateId",
+        "title"
+      ],
+      "title": "CandidateRenameParams",
+      "type": "object"
+    },
+    "CandidateIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "title": "Candidateid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidateId"
+      ],
+      "title": "CandidateIdParams",
+      "type": "object"
+    },
+    "CandidateStatusParams": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "title": "Candidateid",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "proposed",
+            "edited",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidateId",
+        "status"
+      ],
+      "title": "CandidateStatusParams",
+      "type": "object"
+    },
+    "CandidateUpdateBoundsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "title": "Candidateid",
+          "type": "string"
+        },
+        "startS": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Starts",
+          "type": "number"
+        },
+        "endS": {
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "title": "Ends",
+          "type": "number"
+        }
+      },
+      "required": [
+        "candidateId",
+        "startS",
+        "endS"
+      ],
+      "title": "CandidateUpdateBoundsParams",
+      "type": "object"
+    },
+    "SelectionIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "selectionId": {
+          "title": "Selectionid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selectionId"
+      ],
+      "title": "SelectionIdParams",
+      "type": "object"
+    },
+    "EditSetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "selectionId": {
+          "title": "Selectionid",
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "selectionId",
+        "settings"
+      ],
+      "title": "EditSetParams",
+      "type": "object"
+    },
+    "HelloParams": {
+      "additionalProperties": false,
+      "properties": {
+        "protocolVersion": {
+          "default": 1,
+          "title": "Protocolversion",
+          "type": "integer"
+        },
+        "appVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Appversion"
+        }
+      },
+      "title": "HelloParams",
+      "type": "object"
+    },
+    "JobIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "jobId": {
+          "title": "Jobid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "jobId"
+      ],
+      "title": "JobIdParams",
+      "type": "object"
+    },
+    "JobsListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Projectid"
+        },
+        "activeOnly": {
+          "default": false,
+          "title": "Activeonly",
+          "type": "boolean"
+        }
+      },
+      "title": "JobsListParams",
+      "type": "object"
+    },
+    "MediaResolveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "title": "Assetid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assetId"
+      ],
+      "title": "MediaResolveParams",
+      "type": "object"
+    },
+    "MetadataGenerateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "title": "Candidateid",
+          "type": "string"
+        },
+        "providerProfileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Providerprofileid"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        }
+      },
+      "required": [
+        "candidateId"
+      ],
+      "title": "MetadataGenerateParams",
+      "type": "object"
+    },
+    "ModelIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "modelId": {
+          "title": "Modelid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "modelId"
+      ],
+      "title": "ModelIdParams",
+      "type": "object"
+    },
+    "ModelDownloadParams": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "whisper",
+            "face",
+            "llm"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "ModelDownloadParams",
+      "type": "object"
+    },
+    "PresetDeleteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "presetId": {
+          "title": "Presetid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "presetId"
+      ],
+      "title": "PresetDeleteParams",
+      "type": "object"
+    },
+    "PresetSaveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "title": "Settings",
+          "type": "object"
+        },
+        "presetId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presetid"
+        }
+      },
+      "required": [
+        "name",
+        "settings"
+      ],
+      "title": "PresetSaveParams",
+      "type": "object"
+    },
+    "ProjectCreateParams": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ProjectCreateParams",
+      "type": "object"
+    },
+    "ProjectIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "minLength": 1,
+          "title": "Projectid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "title": "ProjectIdParams",
+      "type": "object"
+    },
+    "ProjectRenameParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "name"
+      ],
+      "title": "ProjectRenameParams",
+      "type": "object"
+    },
+    "ProviderIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "title": "Profileid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "title": "ProviderIdParams",
+      "type": "object"
+    },
+    "ProviderModelsParams": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "title": "Profileid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "title": "ProviderModelsParams",
+      "type": "object"
+    },
+    "ProviderSaveParams": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "additionalProperties": true,
+          "title": "Profile",
+          "type": "object"
+        }
+      },
+      "required": [
+        "profile"
+      ],
+      "title": "ProviderSaveParams",
+      "type": "object"
+    },
+    "ProviderTestParams": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profileid"
+        },
+        "adapter": {
+          "anyOf": [
+            {
+              "enum": [
+                "groq",
+                "openai_compatible",
+                "custom",
+                "local"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adapter"
+        },
+        "baseUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseurl"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "probe": {
+          "default": true,
+          "title": "Probe",
+          "type": "boolean"
+        }
+      },
+      "title": "ProviderTestParams",
+      "type": "object"
+    },
+    "RenderQueueParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "title": "RenderQueueParams",
+      "type": "object"
+    },
+    "RenderStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "selectionIds": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Selectionids",
+          "type": "array"
+        },
+        "outputDir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outputdir"
+        },
+        "quality": {
+          "default": "standard",
+          "enum": [
+            "standard",
+            "high"
+          ],
+          "title": "Quality",
+          "type": "string"
+        },
+        "preferHardware": {
+          "default": true,
+          "title": "Preferhardware",
+          "type": "boolean"
+        },
+        "filenameTemplate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filenametemplate"
+        }
+      },
+      "required": [
+        "projectId",
+        "selectionIds"
+      ],
+      "title": "RenderStartParams",
+      "type": "object"
+    },
+    "SelectionListParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "title": "SelectionListParams",
+      "type": "object"
+    },
+    "SelectionSetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "candidateIds": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 200,
+          "title": "Candidateids",
+          "type": "array"
+        },
+        "presetId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presetid"
+        }
+      },
+      "required": [
+        "projectId"
+      ],
+      "title": "SelectionSetParams",
+      "type": "object"
+    },
+    "SettingsGetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        }
+      },
+      "title": "SettingsGetParams",
+      "type": "object"
+    },
+    "SettingsSetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "app",
+            "transcription",
+            "analysis",
+            "render",
+            "privacy",
+            "wizard",
+            "hardware",
+            "downloads",
+            "providers"
+          ],
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "additionalProperties": true,
+          "title": "Value",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "SettingsSetParams",
+      "type": "object"
+    },
+    "FetchPreviewParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "startS": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Starts",
+          "type": "number"
+        },
+        "endS": {
+          "exclusiveMinimum": 0,
+          "maximum": 86400,
+          "title": "Ends",
+          "type": "number"
+        }
+      },
+      "required": [
+        "sourceId",
+        "startS",
+        "endS"
+      ],
+      "title": "FetchPreviewParams",
+      "type": "object"
+    },
+    "SourceIdParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "title": "SourceIdParams",
+      "type": "object"
+    },
+    "ImportFileParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "authorizationAckAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authorizationackat"
+        }
+      },
+      "required": [
+        "projectId",
+        "path"
+      ],
+      "title": "ImportFileParams",
+      "type": "object"
+    },
+    "ImportUrlParams": {
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "title": "Projectid",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "authorizationAckAt": {
+          "minLength": 1,
+          "title": "Authorizationackat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectId",
+        "url",
+        "authorizationAckAt"
+      ],
+      "title": "ImportUrlParams",
+      "type": "object"
+    },
+    "SourceAuthorizationParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "authorizationAckAt": {
+          "minLength": 1,
+          "title": "Authorizationackat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sourceId",
+        "authorizationAckAt"
+      ],
+      "title": "SourceAuthorizationParams",
+      "type": "object"
+    },
+    "TranscriptGetParams": {
+      "additionalProperties": false,
+      "properties": {
+        "transcriptId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcriptid"
+        },
+        "sourceId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourceid"
+        },
+        "includeWords": {
+          "default": true,
+          "title": "Includewords",
+          "type": "boolean"
+        }
+      },
+      "title": "TranscriptGetParams",
+      "type": "object"
+    },
+    "TranscriptionStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "engine": {
+          "enum": [
+            "local_whisper",
+            "cloud_openai"
+          ],
+          "title": "Engine",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "providerProfileId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Providerprofileid"
+        },
+        "preferCaptions": {
+          "default": true,
+          "title": "Prefercaptions",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sourceId",
+        "engine"
+      ],
+      "title": "TranscriptionStartParams",
+      "type": "object"
+    },
+    "Request": {
+      "additionalProperties": true,
+      "properties": {
+        "v": {
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "request",
+          "title": "Kind",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "method"
+      ],
+      "title": "Request",
+      "type": "object"
+    },
+    "Response": {
+      "$defs": {
+        "ErrorPayload": {
+          "properties": {
+            "code": {
+              "title": "Code",
+              "type": "string"
+            },
+            "message": {
+              "title": "Message",
+              "type": "string"
+            },
+            "details": {
+              "additionalProperties": true,
+              "title": "Details",
+              "type": "object"
+            },
+            "retryable": {
+              "default": false,
+              "title": "Retryable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "title": "ErrorPayload",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "v": {
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "response",
+          "title": "Kind",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Response",
+      "type": "object"
+    },
+    "Event": {
+      "properties": {
+        "v": {
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "id": {
+          "default": "",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "event",
+          "title": "Kind",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "ErrorPayload": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorPayload",
+      "type": "object"
+    }
+  }
+}
