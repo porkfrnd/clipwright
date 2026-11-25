@@ -8,7 +8,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from ..common.brand import PRODUCT_NAME
+from ..common.brand import ENGINE_VERSION, PRODUCT_NAME, PROTOCOL_VERSION
 from ..common.errors import EngineError
 from ..common.logging import redact_obj, redact_text, setup_logging
 from ..common.paths import AppPaths
@@ -43,7 +43,13 @@ class EngineApp:
         from .job_handlers import register_jobs
 
         register_jobs(self)
-        self.log.info("%s engine %s starting (protocol %s) data=%s", PRODUCT_NAME, "0.1.0", 1, self.paths.data_dir)
+        self.log.info(
+            "%s engine %s starting (protocol %s) data=%s",
+            PRODUCT_NAME,
+            ENGINE_VERSION,
+            PROTOCOL_VERSION,
+            self.paths.data_dir,
+        )
 
     def reload_binaries(self) -> None:
         from ..common.proc import ProcessRunner

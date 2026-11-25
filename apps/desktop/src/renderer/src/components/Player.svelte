@@ -31,6 +31,7 @@
   export function seek(time: number) {
     if (!video) return
     video.currentTime = Math.max(0, time)
+    if (backdrop && backdrop.readyState >= 1) backdrop.currentTime = video.currentTime
     current = video.currentTime
     onTime?.(current)
   }
@@ -47,6 +48,7 @@
     if (!video) return
     duration = video.duration || 0
     video.currentTime = Math.max(0, Math.min(startS, duration || startS))
+    if (backdrop && backdrop.readyState >= 1) backdrop.currentTime = video.currentTime
     current = video.currentTime
   }
 
@@ -93,10 +95,11 @@
         class="tile-bg"
         {src}
         playsinline
-        preload="metadata"
+        preload="auto"
         muted
         tabindex="-1"
         aria-hidden="true"
+        onloadedmetadata={() => { if (backdrop && video) backdrop.currentTime = video.currentTime }}
       ></video>
     {/if}
     <video

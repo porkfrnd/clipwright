@@ -12,6 +12,7 @@ Clipwright is two independently runnable programs joined by one protocol:
 │    • engine supervisor (spawn, handshake, ping, restart, kill)           │
 │    • safeStorage key vault     • media:// handler (registered IDs only)  │
 │    • native dialogs            • engine subprocess lifecycle            │
+│    • GitHub release check      • update state + trusted IPC             │
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │ NDJSON over stdin/stdout (PROTOCOL v1)
 ┌───────────────────────────────▼──────────────────────────────────────────┐
@@ -54,6 +55,20 @@ AI work, the stdio protocol.
    re-emits boot status; running jobs are recovered from SQLite as `interrupted`, and the
    UI offers Resume.
 5. `engine.shutdown` closes the child on app quit.
+
+## Update checks
+
+The renderer never talks to GitHub. After the shell is usable, it calls the allow-listed
+`updates:state` / `updates:check` IPC handlers. The main process fetches
+`https://api.github.com/repos/porkfrnd/clipwright/releases/latest` with an 8 s timeout, a
+`Clipwright/<version>` user agent, no credentials, and `redirect: 'error'`. Responses are
+validated in `shared/updates.ts`: semver tags, `github.com` release URLs, allow-listed asset
+hosts, bounded notes, and only recognized asset types for the current platform. Results are
+cached for ten minutes; failures are silent outside the Updates page.
+
+The page compares the tag to `app.getVersion()`, shows release notes as escaped plain text,
+and opens the release page or asset in the system browser. It never downloads or executes an
+installer. A dismissal is stored per version in renderer `localStorage`.
 
 ## Data and caching
 
@@ -153,7 +168,8 @@ exists in the model catalog but automatic face tracking is not enabled in this b
 - Strict CSP; renderer has no network access; `connect-src` is `self` (packaged) or
   localhost dev server.
 - Navigation and new windows are blocked; only validated `https:`/`mailto:` links can open
-  externally.
+  externally. Release links come from validated GitHub API data and are restricted to this
+  repository's release host or allow-listed GitHub asset hosts before display.
 - `media://` serves only asset IDs registered by the main process, with Range support and
   safe MIME types.
 - API keys live only in Electron `safeStorage` ciphertext (or a session-only fallback on

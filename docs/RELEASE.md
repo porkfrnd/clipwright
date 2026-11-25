@@ -1,14 +1,18 @@
 # Release
 
+## Public release
+
+[v0.1.1 on GitHub](https://github.com/porkfrnd/clipwright/releases/tag/v0.1.1)
+
 ## Artifacts (this build)
 
-Built on 2026-11-24 with Electron 45.4.1, electron-builder 26.18.0, PyInstaller on Python
+Built on 2026-11-25 with Electron 45.4.1, electron-builder 26.18.0, PyInstaller on Python
 3.12.12, bundled FFmpeg 7.0.2, yt-dlp 2026.10.26 and Deno 2.9.8.
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `release/Clipwright-0.1.0-x86_64.AppImage` | 481 MiB | `b6c39c891f835d426eb62465e75be04b87b5c00230016ab8fed6790269a8b290` |
-| `release/Clipwright-0.1.0-amd64.deb` | 390 MiB | `ce22856274616ae88264879ff5fc5750347acb91e46ac6c1152da1211257677b` |
+| `release/Clipwright-0.1.1-x86_64.AppImage` | 482 MiB | `12dfca4190c9ad53bf6d44be860f8aeccfd1b799a9448699be3dab07f87d9d01` |
+| `release/Clipwright-0.1.1-amd64.deb` | 391 MiB | `363c7484c2ed2771842ba5f0940afdd131745a75d64e6f8772c42d92ee487e86` |
 | `release/linux-unpacked/` | 1.3 GiB | directory |
 
 Breakdown of the unpacked app:
@@ -17,7 +21,7 @@ Breakdown of the unpacked app:
 | --- | --- |
 | Frozen engine (`resources/engine`, onedir) | 682 MB |
 | Bundled binaries (`resources/resources/bin`) | 284 MB |
-| Renderer/main bundle (`app.asar`) | 9.6 MB |
+| Renderer/main bundle (`app.asar`) | 11 MB |
 
 The AppImage/deb contain Electron + the CPU engine + FFmpeg/ffprobe + yt-dlp + Deno + fonts +
 the `llama-cpp-python` runtime used by local AI. Whisper models, the Qwen3 0.6B GGUF, the
@@ -72,16 +76,16 @@ The engine can be used without Electron:
 ## Run
 
 ```bash
-chmod +x Clipwright-0.1.0-x86_64.AppImage
-./Clipwright-0.1.0-x86_64.AppImage
+chmod +x Clipwright-0.1.1-x86_64.AppImage
+./Clipwright-0.1.1-x86_64.AppImage
 
 # or
-sudo apt install ./Clipwright-0.1.0-amd64.deb
+sudo apt install ./Clipwright-0.1.1-amd64.deb
 clipwright
 ```
 
 Data (SQLite, models, assets, outputs, logs) lives in
-`~/.local/share/clipwright` by default, or in the Electron user-data directory used by the
+`~/.config/Clipwright/engine` by default, under the Electron user-data directory used by the
 packaged app. It is outside the install directory. The output folder is configurable.
 
 ## Runtime troubleshooting
@@ -101,7 +105,7 @@ packaged app. It is outside the install directory. The output folder is configur
 - The **unpacked packaged app** completed the full Playwright flow with `PATH=/tmp/emptybin`:
   wizard → local import → real tiny Whisper transcription → stub provider → analysis →
   selection → boundary edit/undo → Studio → real FFmpeg export → validation and security
-  assertions. It passed in ~1 minute. No system Python, Node, FFmpeg or yt-dlp was on
+  assertions. It passed in 51.4 seconds. No system Python, Node, FFmpeg or yt-dlp was on
   `PATH`.
 - `scripts/verify-package` launched the bundled FFmpeg/ffprobe/yt-dlp/Deno with an empty
   `PATH` and completed the frozen-engine `hello`/`ping`/`binaries.status` handshake.
@@ -122,9 +126,10 @@ packaged app. It is outside the install directory. The output folder is configur
 - **Windows**: code signing requires an Authenticode certificate. `electron-builder` NSIS
   config exists, but no Windows artifact was produced or signed.
 - **macOS**: out of scope. No signing/notarization.
-- **Updates**: `electron-updater` is present but no publish provider/update feed is
-  configured. Updates are manual in this build; yt-dlp has an explicit checksum-verified
-  update action. Never enable silent updates without a visible setting and signed feed.
+- **Updates**: the app checks the public GitHub Releases API and links to the notes and
+  platform asset. It is notify-only: no auto-download or auto-install. `electron-updater` has
+  no publish provider in this build; yt-dlp has its own checksum-verified update action.
+  Never enable silent updates without a visible setting and a signed feed.
 
 ## Licenses and FFmpeg GPL
 
@@ -143,10 +148,11 @@ license texts with the installer. `scripts/licenses` is an inventory, not legal 
 
 ## Release checklist
 
-- [x] Engine unit + integration suite passes (92 passed, 1 skipped).
-- [x] Desktop typecheck and Vitest pass (21 tests).
-- [x] Playwright dev flow passes (1 long test, including boundary undo).
-- [x] Packaged unpacked app passes the same flow with an empty `PATH`.
+- [x] Engine unit + integration suite passes (93 passed, 1 skipped).
+- [x] Desktop typecheck and Vitest pass (33 tests).
+- [x] Playwright dev suite passes (3 tests): long local flow, cloud rate-limit wait, and update
+  checker states.
+- [x] Packaged unpacked app passes the long local flow with an empty `PATH` (51.4 s).
 - [x] Frozen engine URL metadata import against a real YouTube URL.
 - [x] Packaged URL preview (H.264 640×360) after the FFmpeg/network fix.
 - [x] Packaged URL preview cache hit and real 1080×1920 URL render with burned-in subtitles.
@@ -166,6 +172,10 @@ license texts with the installer. `scripts/licenses` is an inventory, not legal 
 - [x] Model Manager lists the Qwen GGUF and its streaming SHA-256 download path is exercised with a local HTTP fixture; **Use for AI** creates a keyless local provider and makes it default. The real 610 MiB GGUF was loaded from a local copy, not downloaded through the UI.
 - [x] `scripts/verify-package` passes.
 - [x] `scripts/benchmark` writes measured numbers to `docs/BENCHMARKS.md`.
+- [x] Update checker passes available/current/error states against a local GitHub API stub; the
+  packaged 0.1.1 build reports the public release as current.
+- [x] Cloud transcription resolves a camelCase provider profile and surfaces a 429 as a
+  checkpointed wait with a live countdown; covered by `tests/rate-limit.spec.ts`.
 - [x] Screenshot set re-captured from real Electron windows, all themes/states.
 - [x] `THIRD_PARTY_LICENSES.md` generated and `LICENSE` present.
 - [ ] Live Groq AI tests (blocked: no key).

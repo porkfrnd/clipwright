@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { appState, saveSettings, refreshBoot, applyAppearance, toast } from '$lib/state.svelte'
+  import { appState, saveSettings, refreshBoot, applyAppearance, setRoute, toast } from '$lib/state.svelte'
+  import { checkForUpdates, updates } from '$lib/updates.svelte'
   import { request, errorText } from '$lib/api'
   import Icon from '$components/Icon.svelte'
   import Button from '$components/Button.svelte'
@@ -37,10 +38,10 @@
   let cookiesFile = $state('')
 
   const themes = [
-    { id: 'velvet', name: 'Velvet', color: '#e8c77b', note: 'Near-black violet with antique gold.' },
-    { id: 'ember', name: 'Ember', color: '#ff7a45', note: 'Charcoal warmth with signal orange.' },
-    { id: 'ivory', name: 'Ivory', color: '#7a2333', note: 'Warm paper with an oxblood accent.' },
-    { id: 'slate', name: 'Slate', color: '#57c7bd', note: 'Cool neutral with a teal edge.' }
+    { id: 'velvet', name: 'Velvet', color: '#d8a54b', note: 'Graphite with a brass cut.' },
+    { id: 'ember', name: 'Ember', color: '#c98152', note: 'Warm brown-black with copper.' },
+    { id: 'ivory', name: 'Ivory', color: '#2f5668', note: 'Warm paper with ink blue.' },
+    { id: 'slate', name: 'Slate', color: '#84aeb8', note: 'Cool neutral with blue-grey.' }
   ]
 
   $effect(() => {
@@ -359,7 +360,7 @@
             <label for="local-model-settings">Local model</label>
             <select id="local-model-settings" class="select" bind:value={localModel} onchange={() => patch('transcription', { localModel })}>
               {#each models.filter((m) => m.kind === 'whisper') as model}
-                <option value={model.name}>{model.label} · {model.downloadMb} MB{model.installed ? ' · installed' : ''}</option>
+                <option value={model.name}>{model.label.split(' (')[0]} · {model.downloadMb} MB</option>
               {/each}
             </select>
             {#if !localInstalled}<span class="tiny" style="color:var(--warning)">Not installed. Download it in Model Manager.</span>{/if}
@@ -462,9 +463,9 @@
           {#if hardware}<div class="tiny muted" style="margin-top:6px">{bytesLabel(hardware.freeDiskBytes)} free on this volume.</div>{/if}
         </div>
         <div class="field" style="margin-top:14px">
-          <label>Default output folder</label>
+          <label for="output-folder">Default output folder</label>
           <div class="row">
-            <input class="input mono" readonly value={outputDir} />
+            <input id="output-folder" class="input mono" readonly value={outputDir} />
             <Button size="sm" variant="ghost" onclick={chooseOutput}><Icon name="folder" size={13} /> Choose</Button>
           </div>
         </div>
@@ -528,7 +529,7 @@
                 <ul style="margin:8px 0 0;padding-left:16px">{#each p.details as d}<li>{d}</li>{/each}</ul>
               </div>
             {/each}
-            <div class="banner">Benchmarks on this machine are available via <span class="mono">scripts/benchmark</span>.</div>
+            <div class="banner"><span>Benchmarks on this machine are available via <span class="mono">scripts/benchmark</span>.</span></div>
           </div>
         {:else}
           <p class="small muted">Detecting hardware…</p>
@@ -567,6 +568,16 @@
         <div class="eyebrow">About</div>
         <div class="small" style="margin-top:6px">Clipwright {appState.appInfo?.version || ''}</div>
         <div class="tiny muted mono" style="margin-top:4px">Electron {appState.appInfo?.electron} · Chromium {appState.appInfo?.chrome} · Node {appState.appInfo?.node}</div>
+        <div class="row" style="margin-top:12px">
+          <Button size="sm" variant="ghost" onclick={() => { setRoute('updates'); void checkForUpdates(true) }}>
+            <Icon name="refresh" size={13} /> Check for updates
+          </Button>
+          {#if updates.data?.status === 'available'}
+            <span class="pill gold">v{updates.data.latestVersion} available</span>
+          {:else if updates.data?.status === 'current'}
+            <span class="tiny muted">Up to date</span>
+          {/if}
+        </div>
         <p class="tiny muted" style="margin-top:10px">
           For content you own or are authorized to reuse. FFmpeg is bundled as a separate GPL executable; see THIRD_PARTY_LICENSES.md.
         </p>

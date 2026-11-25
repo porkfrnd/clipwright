@@ -54,6 +54,27 @@
 
   let activeJob = $state<any>(null)
   let jobError = $state<string | null>(null)
+  let clock = $state(Date.now())
+
+  $effect(() => {
+    if (!activeJob || activeJob.state !== 'waiting_rate_limit') return
+    clock = Date.now()
+    const timer = setInterval(() => (clock = Date.now()), 500)
+    return () => clearInterval(timer)
+  })
+
+  const waitTarget = $derived.by(() => {
+    const progress = activeJob?.progress
+    if (progress?.etaSeconds != null) {
+      const emittedAt = Number(progress.at || 0) * 1000
+      return (emittedAt || clock) + Number(progress.etaSeconds) * 1000
+    }
+    return Number(activeJob?.resumeAt || 0) * 1000
+  })
+
+  const waitSeconds = $derived.by(() =>
+    waitTarget ? Math.max(0, Math.ceil((waitTarget - clock) / 1000)) : 0
+  )
   let showDisclosure = $state(false)
   let disclosureChecked = $state(false)
   let pendingAnalysis = $state(false)
@@ -669,7 +690,9 @@
               <Icon name="loader" size={16} />
             {/if}
             <div>
-              <div class="small" style="font-weight:600">{jobLabel(activeJob)}</div>
+              <div class="small" style="font-weight:600">
+                {jobLabel(activeJob)}{#if activeJob.state === 'waiting_rate_limit' && waitSeconds > 0}<span class="mono muted" style="margin-left:6px">· {waitSeconds}s</span>{/if}
+              </div>
               <div class="tiny muted">{activeJob.progress?.stage?.replace(/_/g, ' ') || activeJob.stage || 'preparing'}</div>
             </div>
           </div>

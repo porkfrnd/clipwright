@@ -197,7 +197,12 @@
         Clipwright reads the whole conversation, proposes the moments worth keeping, and gives you a
         calm place to turn them into vertical Shorts. Nothing leaves this computer until you choose a provider.
       </p>
-      <div class="filmstrip" style="margin-top:32px;width:340px"></div>
+      <div class="filmstrip" style="margin-top:32px;width:360px" aria-hidden="true">
+        <div class="filmstrip-frame"><span>01</span></div>
+        <div class="filmstrip-frame active"><span>02</span></div>
+        <div class="filmstrip-frame"><span>03</span></div>
+        <div class="filmstrip-frame"><span>04</span></div>
+      </div>
     </div>
     <div class="mono tiny muted">BYOK · YOUR KEY, YOUR PROVIDER · NO ACCOUNTS</div>
   </aside>
@@ -213,7 +218,7 @@
         <div class="eyebrow">Setup · Step {step + 1} of {steps.length}</div>
         <h2 style="margin-top:6px">{steps[step]}</h2>
       </div>
-      <button class="link tiny" onclick={onSkip}>Skip setup</button>
+      <button class="link tiny muted" onclick={onSkip}>Skip setup</button>
     </div>
 
     {#if step === 0}
@@ -397,7 +402,7 @@
       </div>
     {/if}
 
-    <div class="row" style="margin-top:auto;justify-content:space-between">
+    <div class="row wizard-actions" style="justify-content:space-between">
       <button class="link tiny muted" onclick={() => (step = Math.max(0, step - 1))} disabled={step === 0}>Back</button>
       <div class="row">
         {#if step === 0 && !authorization}

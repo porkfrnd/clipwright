@@ -60,18 +60,18 @@ Events (engine → app), e.g. job progress:
 The supervisor must call `engine.hello` before anything else:
 
 ```json
-{"v":1,"id":"req-1","method":"engine.hello","params":{"protocolVersion":1,"appVersion":"0.1.0"}}
+{"v":1,"id":"req-1","method":"engine.hello","params":{"protocolVersion":1,"appVersion":"0.1.1"}}
 ```
 
 Result:
 
 ```json
 {
-  "engineVersion":"0.1.0",
+  "engineVersion":"0.1.1",
   "protocolVersion":1,
   "productName":"Clipwright",
   "capabilities":["…"],
-  "dataDir":"/home/user/.local/share/clipwright",
+  "dataDir":"/home/user/.config/Clipwright/engine",
   "platform":"linux",
   "python":"3.12.12"
 }

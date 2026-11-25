@@ -36,6 +36,13 @@ const api = {
   showItemInFolder: (path: string) => ipcRenderer.invoke('app:showItemInFolder', { path }),
   openPath: (path: string) => ipcRenderer.invoke('app:openPath', { path }),
   appInfo: () => ipcRenderer.invoke('app:info'),
+  updateState: () => ipcRenderer.invoke('updates:state'),
+  checkForUpdates: (force = false) => ipcRenderer.invoke('updates:check', { force }),
+  onUpdateStatus: (listener: Listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, payload: any) => listener(payload)
+    ipcRenderer.on('updates:status', wrapped)
+    return () => ipcRenderer.removeListener('updates:status', wrapped)
+  },
   secretStatus: () => ipcRenderer.invoke('secrets:status'),
   setSecret: (profileId: string, apiKey: string, allowWeak = false) =>
     ipcRenderer.invoke('secrets:set', { profileId, apiKey, allowWeak }),

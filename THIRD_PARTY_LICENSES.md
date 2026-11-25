@@ -551,7 +551,7 @@ does not declare a license, the entry says so instead of guessing.
 | pytest-asyncio | 1.5.0 | Apache-2.0 |
 | PyYAML | 6.0.4 | MIT |
 | setuptools | 84.2.1 | MIT |
-| shorts-engine | 0.1.0 | See package metadata |
+| shorts-engine | 0.1.1 | See package metadata |
 | tokenizers | 0.23.3 | Development Status :: 5 - Production/Stable, Intended Audience :: Developers, Intended Audience :: Education, Intended Audience :: Science/Research, License :: OSI Approved :: Apache Software License, Operating System :: OS Independent, Programming Language :: Python :: 3, Programming Language :: Py |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
 | truststore | 0.10.5 | MIT |

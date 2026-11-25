@@ -209,7 +209,8 @@ class TranscriptionService:
                 audio_path, opts, duration_s=duration, progress=progress, cancel=cancel
             )
         else:
-            if not provider or not provider.get("base_url"):
+            base_url = (provider or {}).get("baseUrl") or (provider or {}).get("base_url")
+            if not provider or not base_url:
                 raise EngineError("PROVIDER_NOT_FOUND", "Choose a speech service provider in Settings.")
             if not api_key:
                 raise EngineError(
@@ -219,7 +220,7 @@ class TranscriptionService:
             from .cloud_openai import CloudTranscriptionEngine
 
             cloud = CloudTranscriptionEngine(
-                base_url=provider["base_url"],
+                base_url=base_url,
                 api_key=api_key,
                 model=model_id,
                 language=language,

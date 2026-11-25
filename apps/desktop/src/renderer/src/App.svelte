@@ -2,6 +2,14 @@
   import { onMount } from 'svelte'
   import { appState, refreshBoot, parseRoute, setRoute, ingestJobEvent, toast } from '$lib/state.svelte'
   import { request } from '$lib/api'
+  import {
+    updates,
+    startUpdateChecks,
+    stopUpdateChecks,
+    updateIsAvailable,
+    updateIsDismissed,
+    dismissUpdate
+  } from '$lib/updates.svelte'
   import Icon from '$components/Icon.svelte'
   import ToastStack from '$components/ToastStack.svelte'
   import Home from '$routes/Home.svelte'
@@ -10,6 +18,7 @@
   import Studio from '$routes/Studio.svelte'
   import Settings from '$routes/Settings.svelte'
   import Models from '$routes/Models.svelte'
+  import Updates from '$routes/Updates.svelte'
   import Wizard from '$routes/Wizard.svelte'
   import Recovery from '$routes/Recovery.svelte'
 
@@ -17,6 +26,7 @@
     { id: 'home', label: 'Home', icon: 'home' },
     { id: 'projects', label: 'Projects', icon: 'projects' },
     { id: 'models', label: 'Model Manager', icon: 'models' },
+    { id: 'updates', label: 'Updates', icon: 'download' },
     { id: 'settings', label: 'Settings', icon: 'settings' }
   ]
 
@@ -33,7 +43,8 @@
     project: { title: 'Find moments', eyebrow: 'Discovery' },
     studio: { title: 'Shorts Studio', eyebrow: 'Edit & export' },
     settings: { title: 'Settings', eyebrow: 'Preferences' },
-    models: { title: 'Model Manager', eyebrow: 'Local assets' }
+    models: { title: 'Model Manager', eyebrow: 'Local assets' },
+    updates: { title: 'Updates', eyebrow: 'Application' }
   }
 
   const currentProject = $derived(appState.projects.find((p: any) => p.id === appState.projectId))
@@ -94,6 +105,7 @@
       offEvent()
       offStatus()
       offFatal()
+      stopUpdateChecks()
     }
   })
 
@@ -110,6 +122,7 @@
     wizardOpen = !appState.settings?.wizard?.completed
     shellReady = true
     booting = false
+    startUpdateChecks()
     if (wizardOpen) appState.route = 'wizard'
   }
 
@@ -339,14 +352,17 @@
           >
             <Icon name={item.icon} size={16} />
             <span>{item.label}</span>
+            {#if item.id === 'updates' && updateIsAvailable()}
+              <span class="nav-badge new">new</span>
+            {/if}
           </button>
         {/each}
       </nav>
 
       <div class="sidebar-foot">
-        <div class="engine-chip" title={appState.engineDetail || ''}>
-          <span class={`dot ${appState.engineStatus === 'ready' ? '' : appState.engineStatus === 'restarting' ? 'warn' : 'err'}`}></span>
-          <span>Engine {appState.engineStatus}</span>
+        <div class="rail-foot-note">
+          <Icon name="shield" size={13} />
+          <span>Local-first. Files stay here.</span>
         </div>
         <div class="rail-foot-meta">
           <span>v{appState.appInfo?.version || '—'}</span>
@@ -364,7 +380,7 @@
         </div>
         <div class="spacer"></div>
         {#if currentProject && ['project', 'studio'].includes(appState.route)}
-          <span class="topbar-project">{currentProject.counts?.sources || 0} sources · {currentProject.counts?.selections || 0} selected</span>
+          <span class="topbar-project">{currentProject.counts?.sources || 0} source{currentProject.counts?.sources === 1 ? '' : 's'} · {currentProject.counts?.selections || 0} selected</span>
         {/if}
         <div class="topbar-note" title="Transcript excerpts are sent only to the provider you choose.">
           <Icon name="shield" size={13} />
@@ -374,6 +390,19 @@
       </header>
 
       <main class="content">
+        {#if updateIsAvailable() && !updateIsDismissed() && appState.route !== 'updates'}
+          <div class="update-strip" role="status">
+            <span class="update-strip-mark"><Icon name="download" size={14} /></span>
+            <div class="update-strip-copy">
+              <strong>Clipwright {updates.data?.latestVersion} is available.</strong>
+              <span>You are on v{updates.data?.currentVersion}. Downloads open in your browser.</span>
+            </div>
+            <button class="link small" onclick={() => navigate('updates')}>See what changed</button>
+            <button class="icon-btn" onclick={dismissUpdate} aria-label="Dismiss update notice" title="Dismiss for this version">
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+        {/if}
         {#if appState.route === 'home'}
           <Home {createProject} />
         {:else if appState.route === 'projects'}
@@ -386,6 +415,8 @@
           <Settings onRerunWizard={() => (wizardOpen = true)} />
         {:else if appState.route === 'models'}
           <Models />
+        {:else if appState.route === 'updates'}
+          <Updates />
         {:else}
           <Home {createProject} />
         {/if}

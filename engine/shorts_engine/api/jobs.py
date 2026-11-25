@@ -64,6 +64,7 @@ class JobContext:
             "stage": stage,
             "fraction": max(0.0, min(1.0, float(fraction))),
             "message": message,
+            "at": time.time(),
         }
         if eta_seconds is not None:
             payload["etaSeconds"] = round(eta_seconds, 1)
@@ -86,7 +87,7 @@ class JobContext:
         seconds = max(0.0, float(seconds))
         resume_at = time.time() + seconds
         self.state("waiting_rate_limit", resumeAt=resume_at, reason=reason)
-        self.progress("waiting", 0.5, reason, force=True)
+        self.progress("waiting", 0.5, reason, eta_seconds=seconds, force=True)
         remaining = seconds
         while remaining > 0:
             step = min(remaining, 5.0)
@@ -96,16 +97,7 @@ class JobContext:
             except asyncio.TimeoutError:
                 remaining -= step
                 if remaining > 0:
-                    self.manager.emit(
-                        "job.progress",
-                        {
-                            "jobId": self.job_id,
-                            "stage": "waiting",
-                            "fraction": 0.5,
-                            "message": reason,
-                            "etaSeconds": round(remaining, 1),
-                        },
-                    )
+                    self.progress("waiting", 0.5, reason, eta_seconds=remaining, force=True)
         self.state("running")
 
 

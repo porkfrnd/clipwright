@@ -173,7 +173,7 @@
                 <Button size="sm" variant="ghost" onclick={() => verify(model)}>Verify</Button>
                 <button class="icon-btn" title="Remove model" onclick={() => (deleting = model)} style="width:32px;height:32px"><Icon name="trash" size={13} /></button>
               {:else}
-                <Button size="sm" variant="primary" onclick={() => install(model)} disabled={Boolean(installing)}>
+                <Button size="sm" variant="ghost" onclick={() => install(model)} disabled={Boolean(installing)}>
                   <Icon name="download" size={13} /> {installing === `whisper:${model.name}` ? 'Downloading…' : 'Install'}
                 </Button>
               {/if}
@@ -206,7 +206,7 @@
               <Button size="sm" variant="ghost" onclick={() => verify(model)}>Verify</Button>
               <button class="icon-btn" title="Remove model" onclick={() => (deleting = model)} style="width:32px;height:32px"><Icon name="trash" size={13} /></button>
             {:else}
-              <Button size="sm" variant="primary" onclick={() => install(model)} disabled={Boolean(installing)}>
+              <Button size="sm" variant="ghost" onclick={() => install(model)} disabled={Boolean(installing)}>
                 <Icon name="download" size={13} /> {installing === `llm:${model.name}` ? 'Downloading…' : 'Install'}
               </Button>
             {/if}
@@ -237,9 +237,11 @@
         <h3 style="margin-top:4px">yt-dlp</h3>
         {#if binaries}
           <div class="small mono muted" style="margin-top:8px">{binaries.ytdlp.version || 'not installed'}</div>
-          <div class="tiny muted" style="margin-top:4px">{binaries.ytdlp.origin}</div>
+          <div class="tiny muted mono truncate" style="margin-top:4px" title={binaries.ytdlp.origin}>{(binaries.ytdlp.origin || '').split('/').filter(Boolean).slice(-3).join('/')}</div>
           {#if binaries.jsRuntime?.version}
-            <div class="tiny muted" style="margin-top:6px">JS runtime: {binaries.jsRuntime.kind} {binaries.jsRuntime.version}</div>
+            <div class="tiny muted truncate" style="margin-top:6px" title={`${binaries.jsRuntime.kind} ${binaries.jsRuntime.version}`}>
+              JS runtime: {binaries.jsRuntime.version.split(' (')[0]}
+            </div>
           {:else}
             <div class="notice warn" style="margin-top:10px">No JavaScript runtime. Some YouTube formats may be missing until Deno is bundled.</div>
           {/if}

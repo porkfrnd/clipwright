@@ -19,6 +19,9 @@ engine/dist/
 resources/bin/*/
 !resources/bin/MANIFEST.json
 
+# Local build instructions for future agents (intentionally untracked)
+BUILD_FOR_AGENTS.md
+
 # Local data and scratch
 *.sqlite3
 *.sqlite3-wal

@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 /// <reference types="svelte" />
 
+import type { UpdateState } from '$shared/updates'
+
 interface ClipwrightBridge {
   request<T = any>(method: string, params?: Record<string, any>): Promise<T>
   resolveAsset(assetId: string): Promise<{ mediaUrl: string; startS?: number; endS?: number }>
@@ -16,6 +18,9 @@ interface ClipwrightBridge {
   showItemInFolder(path: string): Promise<boolean>
   openPath(path: string): Promise<boolean>
   appInfo(): Promise<any>
+  updateState(): Promise<UpdateState>
+  checkForUpdates(force?: boolean): Promise<UpdateState>
+  onUpdateStatus(listener: (state: UpdateState) => void): () => void
   secretStatus(): Promise<any>
   setSecret(profileId: string, apiKey: string, allowWeak?: boolean): Promise<any>
   deleteSecret(profileId: string): Promise<any>

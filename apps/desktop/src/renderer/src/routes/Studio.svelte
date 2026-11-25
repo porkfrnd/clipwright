@@ -468,7 +468,7 @@
               </select>
             </div>
             <div class="field">
-              <label>Text colour</label>
+              <span class="label">Text colour</span>
               <div class="swatch-row">
                 {#each ['#FFFFFF', '#F7E8C3', '#7FD1C1', '#FFD4DA', '#C9A7FF'] as color}
                   <button class={`swatch ${edit.subtitles.color === color ? 'active' : ''}`} style={`background:${color}`} title={color} onclick={() => update('subtitles', 'color', color)}></button>
@@ -476,7 +476,7 @@
               </div>
             </div>
             <div class="field">
-              <label>Highlight colour</label>
+              <span class="label">Highlight colour</span>
               <div class="swatch-row">
                 {#each ['#E8C77B', '#FF9A6F', '#7FD1C1', '#C9A7FF', '#FFFFFF'] as color}
                   <button class={`swatch ${edit.subtitles.highlightColor === color ? 'active' : ''}`} style={`background:${color}`} title={color} onclick={() => update('subtitles', 'highlightColor', color)}></button>
@@ -522,9 +522,9 @@
             <label class="check"><input type="checkbox" checked={edit.audio.voiceEnhance} onchange={(e) => update('audio', 'voiceEnhance', (e.currentTarget as HTMLInputElement).checked)} /><span>Gentle voice enhancement (EQ + light compression)</span></label>
             <label class="check"><input type="checkbox" checked={edit.audio.denoise} onchange={(e) => update('audio', 'denoise', (e.currentTarget as HTMLInputElement).checked)} /><span>Noise reduction</span></label>
             <div class="field">
-              <label>Background music (optional)</label>
+              <label for="music-path">Background music (optional)</label>
               <div class="row">
-                <input class="input mono" readonly value={edit.audio.musicPath || ''} placeholder="No music" />
+                <input id="music-path" class="input mono" readonly value={edit.audio.musicPath || ''} placeholder="No music" />
                 <Button size="sm" variant="ghost" onclick={chooseMusic}><Icon name="folder" size={13} /> Choose</Button>
                 {#if edit.audio.musicPath}<button class="link tiny" onclick={() => update('audio', 'musicPath', null)}>Remove</button>{/if}
               </div>

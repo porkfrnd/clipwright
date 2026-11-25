@@ -559,3 +559,36 @@ Final artifacts for this pass:
 AppImage 481 MiB  sha256 b6c39c891f835d426eb62465e75be04b87b5c00230016ab8fed6790269a8b290
 deb      390 MiB  sha256 ce22856274616ae88264879ff5fc5750347acb91e46ac6c1152da1211257677b
 ```
+
+## 2026-11-25 — Release desk, editorial pass, and cloud-path fixes
+
+The interface moved from the earlier poster-like treatment to a quieter editorial "cutting room":
+Source Serif 4 display type, Inter for controls, JetBrains Mono for ledger details, warm brass
+on graphite, hairline rules, and a four-frame contact strip in the wizard. The boot sheet uses
+a film-leader motif instead of a spinner. All screenshots were regenerated from the real app.
+
+**Update desk.** The main process checks the public `porkfrnd/clipwright` release feed once when
+the app opens, caches the answer for ten minutes, and exposes it through a narrow preload bridge.
+The renderer adds a quiet banner, a nav badge, and an Updates page with release notes, platform
+asset choice, and a manual recheck. Failure is silent; the page states what happened without
+blocking the rest of the app. Version is 0.1.1.
+
+**Real bugs found while exercising the app.**
+
+- Cloud transcription compared a camelCase provider profile with `base_url`, so every cloud
+  transcription failed with "Choose a speech service provider" even when a valid profile was
+  selected. The service now accepts `baseUrl` (with the snake-case alias kept for compatibility).
+- `CloudTranscriptionEngine` slept through three 429 retries before raising. That delayed the job
+  manager's checkpointed wait by up to 90 seconds and hid the countdown. It now raises `RateLimited`
+  immediately; the job manager waits, checkpoints, and the UI shows the remaining seconds.
+- Blur fit hid its own backdrop: the foreground video painted an opaque black letterbox over the
+  blurred copy. The foreground background is now transparent in blur layout.
+- At 1120 px the Home action button overlapped the hero copy. The hero is now a two-column grid
+  that reserves space for the button, collapsing to one column on phones.
+- Wizard "Skip setup" was visually primary despite being a secondary action; it is muted now.
+
+**Verification.** Engine `93 passed, 1 skipped`; desktop `33 passed`; typecheck and production
+build clean with no Svelte a11y warnings; Playwright `3 passed` (rate-limit 3.8 s, full local
+flow 45.2 s, update checker 4.3 s). The rate-limit test covers the exact cloud transcription
+regression above. Screenshots `01`–`16`, `18`–`20` regenerated at 1440×900 (plus the large and
+small layout shots); the duplicate fresh-profile wizard shot was removed.

@@ -1,6 +1,4 @@
 import { _electron as electron } from '@playwright/test'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const APP = '/home/Binayak/.deepai-code/projects/clipwright/apps/desktop'
@@ -46,6 +44,7 @@ await page.setViewportSize({ width: 1440, height: 900 })
 await shot(page, '01-home-velvet.png')
 
 const projectId = await page.evaluate(async () => (await window.clipwright.request('project.list')).projects.find((p) => p.counts.sources > 0).id)
+const originalProjectName = await page.evaluate(async (id) => (await window.clipwright.request('project.list')).projects.find((p) => p.id === id)?.name, projectId)
 await page.evaluate((id) => { location.hash = `#/project/${id}` }, projectId)
 await page.waitForTimeout(3000)
 await shot(page, '02-discovery-velvet.png')
@@ -57,17 +56,17 @@ await page.getByRole('button', { name: 'Close compare' }).click()
 
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Studio' }).click()
 await page.waitForTimeout(2500)
+// Blur fit shows the whole source frame in the marketing shot; Fill remains the app default.
+await page.getByRole('button', { name: 'Blur fit' }).click().catch(() => {})
+await page.waitForTimeout(1200)
 await shot(page, '04-studio-velvet.png')
 
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click()
 await page.waitForTimeout(1800)
 await shot(page, '05-settings-velvet.png')
-await page.locator('text=Storage & privacy').scrollIntoViewIfNeeded()
+await page.getByText('Storage & privacy', { exact: true }).evaluate((el) => el.scrollIntoView({ block: 'start' }))
 await page.waitForTimeout(500)
 await shot(page, '06-settings-privacy.png')
-await page.locator('text=What gets sent').scrollIntoViewIfNeeded()
-await page.waitForTimeout(500)
-await shot(page, '06b-settings-privacy-lower.png')
 
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Model Manager' }).click()
 await page.waitForTimeout(1800)
@@ -91,9 +90,10 @@ await page.waitForTimeout(2500)
 await shot(page, '13-discovery-large.png')
 
 // Empty project panel, using the same profile.
-await page.evaluate(async () => {
+const emptyProjectId = await page.evaluate(async () => {
   const p = await window.clipwright.request('project.create', { name: 'A room with nothing in it yet' })
   location.hash = `#/project/${p.project.id}`
+  return p.project.id
 })
 await page.waitForTimeout(2200)
 await shot(page, '14-empty-project.png')
@@ -120,7 +120,16 @@ await page.evaluate(async (id) => {
 await page.waitForTimeout(2200)
 await shot(page, '19-long-title.png')
 
+// Leave the showcase profile as we found it: original name, no throwaway project.
+await page.evaluate(async ({ id, name, emptyId }) => {
+  await window.clipwright.request('project.rename', { projectId: id, name })
+  await window.clipwright.request('project.delete', { projectId: emptyId })
+  location.hash = '#/home'
+}, { id: projectId, name: originalProjectName, emptyId: emptyProjectId })
+await page.waitForTimeout(700)
+
 // First-launch wizard on a clean profile.
+await page.setViewportSize({ width: 1440, height: 900 })
 await page.evaluate(async () => {
   await window.clipwright.request('settings.set', { key: 'wizard', value: { completed: false } })
   location.hash = '#/home'
@@ -132,10 +141,3 @@ await page.evaluate(async () => {
   await window.clipwright.request('settings.set', { key: 'wizard', value: { completed: true } })
 })
 await showcase.app.close()
-
-const fresh = mkdtempSync(join(tmpdir(), 'cw-empty-'))
-const empty = await launch(fresh)
-await empty.page.setViewportSize({ width: 1440, height: 900 })
-await shot(empty.page, '17-first-launch-wizard.png')
-await empty.app.close()
-rmSync(fresh, { recursive: true, force: true })

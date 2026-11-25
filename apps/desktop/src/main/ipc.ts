@@ -6,6 +6,7 @@ import type { EngineClient } from './engine'
 import { EngineError } from './engine'
 import type { SecretStore } from './secrets'
 import { registerMedia } from './media'
+import { checkForUpdates, cachedUpdate } from './updates'
 
 const ALLOWED_METHODS = new Set([
   'engine.hello', 'engine.ping', 'engine.shutdown',
@@ -118,6 +119,20 @@ export function registerIpc(engine: EngineClient, secrets: SecretStore, getWindo
     isPackaged: app.isPackaged,
     userData: app.getPath('userData')
   }
+  })
+
+  ipcMain.handle('updates:state', (event) => {
+    assertTrusted(event)
+    return cachedUpdate(app.getVersion())
+  })
+
+  ipcMain.handle('updates:check', async (event, raw) => {
+    assertTrusted(event)
+    const parsed = z.object({ force: z.boolean().optional().default(false) }).safeParse(raw)
+    if (!parsed.success) throw new Error('Invalid update request')
+    const state = await checkForUpdates(app.getVersion(), parsed.data.force)
+    getWindow()?.webContents.send('updates:status', state)
+    return state
   })
 
   ipcMain.handle('engine:status', (event) => {

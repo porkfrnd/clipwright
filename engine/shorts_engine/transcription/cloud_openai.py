@@ -168,12 +168,9 @@ class CloudTranscriptionEngine:
                     "This audio chunk is too large for the speech service. Try a smaller chunk size.",
                 )
             if response.status_code == 429:
+                # Surface the wait immediately so the job manager can checkpoint and show a countdown.
                 retry = self.last_rate_headers.retry_after_s or 5.0
-                if attempt >= self.max_retries:
-                    raise RateLimited(retry, "The speech service is rate limiting this key.")
-                attempt += 1
-                await asyncio.sleep(min(retry, 120))
-                continue
+                raise RateLimited(retry, "The speech service is rate limiting this key.")
             if response.status_code >= 500 and attempt < self.max_retries:
                 attempt += 1
                 await asyncio.sleep(2**attempt)

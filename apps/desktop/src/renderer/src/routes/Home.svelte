@@ -18,6 +18,10 @@
   let authorized = $state(Boolean(appState.settings?.privacy.authorizationAcknowledgedAt))
   let recentProjects = $derived(appState.projects.slice(0, 4))
 
+  function focusOnMount(node: HTMLInputElement) {
+    requestAnimationFrame(() => node.focus())
+  }
+
   const totals = $derived({
     projects: appState.projects.length,
     moments: appState.projects.reduce((sum: number, p: any) => sum + (p.counts?.selections || 0), 0),
@@ -109,7 +113,7 @@
 </script>
 
 <div class="page">
-  <header class="page-head">
+  <header class="page-head home-head">
     <div>
       <div class="eyebrow">Workspace</div>
       <h1 style="margin-top:8px">Find the moment.<br /><span class="gold">Make it travel.</span></h1>
@@ -141,10 +145,10 @@
     </div>
     <div class="overview-machine">
       <div class="eyebrow">This machine</div>
-      <div class="small soft">
-        {appState.hardware?.cpuModel || 'Checking CPU…'}
-        {#if appState.hardware}· {appState.hardware.cores} cores · {bytesLabel(appState.hardware.ramBytes)}{/if}
-      </div>
+      <div class="small soft">{appState.hardware?.cpuModel || 'Checking CPU…'}</div>
+      {#if appState.hardware}
+        <div class="tiny muted">{appState.hardware.cores} cores · {bytesLabel(appState.hardware.ramBytes)}</div>
+      {/if}
       <div class="row tiny muted">
         <span class="pill">{appState.hardware?.recommendedProfile || '—'} profile</span>
         {#if appState.hardware?.usableHardwareEncoder}<span class="pill success">{appState.hardware.usableHardwareEncoder}</span>{:else}<span class="pill">software encode</span>{/if}
@@ -277,7 +281,7 @@
         </div>
         <div class="field">
           <label for="project-name">Project name</label>
-          <input id="project-name" class="input" bind:value={newName} placeholder="Episode 14 · the quiet interview" onkeydown={(e) => e.key === 'Enter' && newProject()} autofocus />
+          <input id="project-name" class="input" bind:value={newName} placeholder="Episode 14 · the quiet interview" onkeydown={(e) => e.key === 'Enter' && newProject()} use:focusOnMount />
         </div>
         <div class="row" style="justify-content:flex-end">
           <Button variant="ghost" onclick={() => (showNew = false)}>Cancel</Button>
