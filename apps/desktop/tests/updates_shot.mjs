@@ -8,21 +8,21 @@ const SHOTS = '/home/Binayak/.deepai-code/projects/clipwright/docs/screenshots'
 const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({
-    tag_name: 'v0.2.0',
-    name: 'Clipwright 0.2.0',
+    tag_name: 'v0.2.1',
+    name: 'Clipwright 0.2.1',
     published_at: '2026-11-25T10:00:00Z',
-    html_url: 'https://github.com/porkfrnd/clipwright/releases/tag/v0.2.0',
+    html_url: 'https://github.com/porkfrnd/clipwright/releases/tag/v0.2.1',
     body: '## A calmer cutting room\n\n- Discovery now batches adjacent windows more evenly.\n- The update check stays quiet unless something is actually new.\n- Fixed a focus trap in the compare sheet.\n\n### Under the hood\n\n`JobManager` keeps its checkpoint when a provider asks us to wait.',
     assets: [
       {
-        name: 'Clipwright-0.2.0-x86_64.AppImage',
+        name: 'Clipwright-0.2.1-x86_64.AppImage',
         size: 504000000,
-        browser_download_url: 'https://github.com/porkfrnd/clipwright/releases/download/v0.2.0/Clipwright-0.2.0-x86_64.AppImage'
+        browser_download_url: 'https://github.com/porkfrnd/clipwright/releases/download/v0.2.1/Clipwright-0.2.1-x86_64.AppImage'
       },
       {
-        name: 'Clipwright-0.2.0-amd64.deb',
+        name: 'Clipwright-0.2.1-amd64.deb',
         size: 409000000,
-        browser_download_url: 'https://github.com/porkfrnd/clipwright/releases/download/v0.2.0/Clipwright-0.2.0-amd64.deb'
+        browser_download_url: 'https://github.com/porkfrnd/clipwright/releases/download/v0.2.1/Clipwright-0.2.1-amd64.deb'
       }
     ]
   }))

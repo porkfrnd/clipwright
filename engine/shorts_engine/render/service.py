@@ -30,6 +30,7 @@ from ..storage.repos import (
 from .ass import build_ass, write_ass
 from .encoder import EncoderChoice, EncoderProbe
 from .filters import build_ffmpeg_command, parse_progress_line
+from .timeline import plan_timeline, remap_segments
 
 
 @dataclass
@@ -207,19 +208,52 @@ class RenderService:
             total=total,
             selection_id=selection_id,
         )
+        # Use the measured start of the downloaded section, not the requested
+        # one. yt-dlp can land on an earlier keyframe; the container start time
+        # tells us how far the section really begins before the requested cut.
+        media_offset = await self._measured_offset(media_path, media_offset)
         local_start = start - media_offset
         if local_start < 0:
             local_start = 0
 
         subtitle_style = edit.get("subtitles") or {}
         ass_path: Path | None = None
-        if subtitle_style.get("enabled", True):
-            ass_text = build_ass(
-                segments=transcript["segments"],
+        timeline: dict[str, Any] | None = None
+        ass_start, ass_end = start, end
+        ass_segments = transcript["segments"]
+        tighten = subtitle_style.get("tighten") or {}
+        if tighten.get("enabled"):
+            plan = plan_timeline(
+                transcript["segments"],
                 start_s=start,
                 end_s=end,
+                pause_threshold_s=float(tighten.get("pauseThresholdS") or 0.6),
+                min_pause_s=float(tighten.get("minPauseS") or 0.25),
+                remove_fillers=bool(tighten.get("removeFillers")),
+                word_timing=transcript.get("wordTiming") or "approximate",
+            )
+            if plan["supported"] and plan["cuts"]:
+                duration = max(0.2, float(plan["plannedDurationS"]))
+                ass_start, ass_end = 0.0, duration
+                ass_segments = remap_segments(
+                    transcript["segments"], start_s=start, end_s=end, cuts=plan["cuts"]
+                )
+                timeline = {
+                    "keepRanges": [
+                        {"startS": max(0.0, item["startS"] - start), "endS": max(0.0, item["endS"] - start)}
+                        for item in plan["keepRanges"]
+                    ],
+                    "fadeS": 0.03,
+                }
+        if subtitle_style.get("enabled", True):
+            ass_text = build_ass(
+                segments=ass_segments,
+                start_s=ass_start,
+                end_s=ass_end,
                 style=subtitle_style,
                 word_timing=transcript.get("wordTiming") or "approximate",
+                offset_ms=float(subtitle_style.get("offsetMs") or 0.0),
+                line_offsets_ms=subtitle_style.get("lineOffsetsMs") or {},
             )
             ass_path = write_ass(job_tmp / f"clip_{index}_subtitles.ass", ass_text)
 
@@ -252,6 +286,7 @@ class RenderService:
             fonts_dir=fonts_dir(),
             measured=measured,
             source_fps=probe.get("fps"),
+            timeline=timeline,
         )
         hooks.progress(selection_id, index, total, 0.12, f"Rendering clip {index} of {total}…")
 
@@ -305,6 +340,20 @@ class RenderService:
             "ffprobe": report,
             "sourceNote": source_note,
         }
+
+    async def _measured_offset(self, media_path: Path, requested_start: float) -> float:
+        """Return the source time represented by media time zero.
+
+        The probe's ``start_time`` is the container's first timestamp. A section
+        trimmed on a keyframe can carry a small positive offset; adding it to the
+        requested start keeps subtitles and audio on the same timeline.
+        """
+        try:
+            info = await self.prober.probe(media_path, fresh=True)
+        except EngineError:
+            return requested_start
+        start_time = float(info.get("start_time_s") or 0.0)
+        return max(0.0, requested_start + start_time)
 
     async def _prepare_media(
         self,

@@ -93,6 +93,16 @@ export interface EditSettings {
     maxLines: number
     uppercase: boolean
     hideFillers: boolean
+    offsetMs: number
+    lineOffsetsMs: Record<string, number>
+    safeZone: "none" | "tiktok" | "reels" | "shorts"
+    safePreset: string
+    tighten: {
+      enabled: boolean
+      pauseThresholdS: number
+      minPauseS: number
+      removeFillers: boolean
+    }
   }
   effects: {
     enabled: boolean

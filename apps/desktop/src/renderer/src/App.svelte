@@ -11,6 +11,7 @@
     dismissUpdate
   } from '$lib/updates.svelte'
   import Icon from '$components/Icon.svelte'
+  import BrandMark from '$components/BrandMark.svelte'
   import ToastStack from '$components/ToastStack.svelte'
   import Home from '$routes/Home.svelte'
   import Projects from '$routes/Projects.svelte'
@@ -36,9 +37,10 @@
   let shellReady = $state(false)
   let bootLog = $state<string[]>([])
   let bootAttempt: Promise<void> | null = null
+  let contentEl = $state<HTMLElement | null>(null)
 
   const routeMeta: Record<string, { title: string; eyebrow: string }> = {
-    home: { title: 'The cutting room', eyebrow: 'Workspace' },
+    home: { title: 'Home', eyebrow: 'Workspace' },
     projects: { title: 'Projects', eyebrow: 'Library' },
     project: { title: 'Find moments', eyebrow: 'Discovery' },
     studio: { title: 'Shorts Studio', eyebrow: 'Edit & export' },
@@ -53,6 +55,13 @@
   const bootStage = $derived(
     engineReady ? (appState.booted ? 3 : 2) : ['starting', 'restarting'].includes(appState.engineStatus) ? 1 : 0
   )
+  // Every route starts at its own top. Without this, moving from a long
+  // Settings page to Home leaves the hero scrolled under the fixed top bar.
+  $effect(() => {
+    appState.route
+    contentEl?.scrollTo({ top: 0, behavior: 'auto' })
+  })
+
   const bootStatus = $derived(
     bootError
       ? 'Waiting for a clean start'
@@ -176,9 +185,12 @@
   async function finishWizard() {
     wizardOpen = false
     appState.settings = { ...(appState.settings as any), wizard: { completed: true } }
+    // Leave the wizard before the settings round-trip. The shell is usable as
+    // soon as this flips, and a delayed route change would remount Home and
+    // throw away anything the user had already started typing.
+    setRoute('home')
     await request('settings.set', { key: 'wizard', value: { completed: true } })
     await refreshBoot()
-    setRoute('home')
   }
 
   async function createProject(name: string) {
@@ -209,7 +221,7 @@
           <div class="leader-frame">
             <div class="leader-grid"></div>
             <div class="leader-cross"></div>
-            <div class="leader-count">C</div>
+            <div class="leader-count"><BrandMark size={76} /></div>
             <div class="leader-scan"></div>
             <span class="leader-corner tl"></span>
             <span class="leader-corner tr"></span>
@@ -302,10 +314,10 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">C</div>
+        <BrandMark size={40} />
         <div>
           <div class="brand-name">Clipwright</div>
-          <div class="brand-sub">Short-form editor</div>
+          <div class="brand-sub">Clip. Edit. Grow.</div>
         </div>
       </div>
 
@@ -384,12 +396,12 @@
         {/if}
         <div class="topbar-note" title="Transcript excerpts are sent only to the provider you choose.">
           <Icon name="shield" size={13} />
-          <span>Private by design</span>
+          <span>Private workspace</span>
         </div>
         <button class="icon-btn" title="Settings" onclick={() => navigate('settings')}><Icon name="settings" size={16} /></button>
       </header>
 
-      <main class="content">
+      <main class="content" bind:this={contentEl}>
         {#if updateIsAvailable() && !updateIsDismissed() && appState.route !== 'updates'}
           <div class="update-strip" role="status">
             <span class="update-strip-mark"><Icon name="download" size={14} /></span>

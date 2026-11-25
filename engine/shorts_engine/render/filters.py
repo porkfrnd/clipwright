@@ -81,6 +81,7 @@ def build_audio_chain(
     input_index: int,
     music_index: int,
     duration: float,
+    input_label: str | None = None,
 ) -> tuple[list[str], str]:
     """Return (extra filter chains, final audio label)."""
     target_i = float(audio.get("loudnessTarget", -14.0))
@@ -106,11 +107,12 @@ def build_audio_chain(
     filters.append(loudnorm)
     filters.append("aresample=48000")
     base = ",".join(filters)
+    label = input_label or f"[{input_index}:a]"
     if not has_music:
-        return [f"[{input_index}:a]{base}[aout]"], "[aout]"
+        return [f"{label}{base}[aout]"], "[aout]"
     music_gain = float(audio.get("musicGainDb", -18.0))
     chains = [
-        f"[{input_index}:a]{base}[voice0]",
+        f"{label}{base}[voice0]",
         "[voice0]asplit=2[voice][side]",
         (
             f"[{music_index}:a]volume={music_gain}dB,"
@@ -142,6 +144,7 @@ def build_ffmpeg_command(
     fonts_dir: Path | None,
     measured: dict[str, float] | None,
     source_fps: float | None,
+    timeline: dict[str, Any] | None = None,
 ) -> list[str]:
     args = [*ffmpeg, "-hide_banner", "-nostdin", "-y", "-ss", f"{start_s:.3f}", "-t", f"{duration:.3f}", "-i", str(source)]
     music_index = None
@@ -162,6 +165,34 @@ def build_ffmpeg_command(
         source_fps=source_fps,
     )
     audio_input = 0 if has_audio else silence_index or 1
+    video_parts: list[str] = []
+    audio_parts: list[str] = []
+    video_input = "[0:v]"
+    audio_label_override: str | None = None
+    keep_ranges = (timeline or {}).get("keepRanges") or []
+    if timeline and len(keep_ranges) > 1:
+        fade = max(0.005, min(float(timeline.get("fadeS") or 0.03), 0.06))
+        video_labels: list[str] = []
+        audio_labels: list[str] = []
+        for index, keep in enumerate(keep_ranges):
+            begin = max(0.0, float(keep["startS"]))
+            finish = max(begin + 0.05, float(keep["endS"]))
+            length = finish - begin
+            video_parts.append(f"[0:v]trim=start={begin:.3f}:end={finish:.3f},setpts=PTS-STARTPTS[v{index}]")
+            video_labels.append(f"[v{index}]")
+            if has_audio:
+                edge = min(fade, max(0.005, length / 4))
+                audio_parts.append(
+                    f"[0:a]atrim=start={begin:.3f}:end={finish:.3f},asetpts=PTS-STARTPTS,"
+                    f"afade=t=in:st=0:d={edge:.3f},afade=t=out:st={max(0.0, length - edge):.3f}:d={edge:.3f}[a{index}]"
+                )
+                audio_labels.append(f"[a{index}]")
+        if video_labels:
+            video_parts.append("".join(video_labels) + f"concat=n={len(video_labels)}:v=1:a=0[vbase]")
+            video_input = "[vbase]"
+        if audio_labels:
+            audio_parts.append("".join(audio_labels) + f"concat=n={len(audio_labels)}:v=0:a=1[acat]")
+            audio_label_override = "[acat]"
     audio_chains, audio_label = build_audio_chain(
         audio=audio,
         measured=measured,
@@ -169,8 +200,9 @@ def build_ffmpeg_command(
         input_index=audio_input,
         music_index=music_index or 1,
         duration=duration,
+        input_label=audio_label_override,
     )
-    filter_complex = ";".join([f"[0:v]{video_chain}", *audio_chains])
+    filter_complex = ";".join([*video_parts, f"{video_input}{video_chain}", *audio_parts, *audio_chains])
     args += [
         "-filter_complex", filter_complex,
         "-map", "[vout]",

@@ -49,6 +49,7 @@ def parse_probe(data: dict[str, Any]) -> dict[str, Any]:
         language = fmt["tags"]["language"]
     return {
         "duration_s": round(duration, 3),
+        "start_time_s": round(float(fmt.get("start_time") or 0.0), 6),
         "width": int(video["width"]) if video and video.get("width") else None,
         "height": int(video["height"]) if video and video.get("height") else None,
         "fps": round(fps, 3) if fps else None,

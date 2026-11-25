@@ -156,6 +156,8 @@ def build_ass(
     end_s: float,
     style: dict[str, Any],
     word_timing: str = "exact",
+    offset_ms: float = 0.0,
+    line_offsets_ms: dict[str, float] | None = None,
 ) -> str:
     font = style.get("font") or "Bebas Neue"
     font_size = int(style.get("fontSize") or 64)
@@ -197,21 +199,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         uppercase=uppercase,
         word_timing=word_timing,
     )
+    line_offsets_ms = line_offsets_ms or {}
     events: list[str] = []
     for line in lines:
         rows = line.rows or [line.words]
+        # A per-line nudge is additive to the global sync offset. Keys are the
+        # line's original source start in milliseconds, stable across edits.
+        line_key = f"{int(round(line.start_s * 1000))}"
+        shift_s = (offset_ms + float(line_offsets_ms.get(line_key, 0.0))) / 1000.0
+        line_start = max(start_s, line.start_s + shift_s)
+        line_end = min(end_s, max(line_start + 0.05, line.end_s + shift_s))
         if line.approximate:
             # Phrase-level highlight when word timing is not reliable.
             text = "\\N".join(" ".join(_escape(w.text) for w in row) for row in rows)
             events.append(
-                f"Dialogue: 0,{ass_time(line.start_s - start_s)},{ass_time(min(end_s, line.end_s) - start_s)},"
+                f"Dialogue: 0,{ass_time(line_start - start_s)},{ass_time(line_end - start_s)},"
                 f"Clip,,0,0,0,,{{\\c{highlight}}}{text}"
             )
             continue
         for index, word in enumerate(line.words):
-            word_start = max(line.start_s, word.start_s)
+            word_start = max(line_start, word.start_s + shift_s)
             word_end = (
-                line.words[index + 1].start_s if index + 1 < len(line.words) else line.end_s
+                line.words[index + 1].start_s + shift_s if index + 1 < len(line.words) else line_end
             )
             if word_end - word_start < 0.03:
                 word_end = word_start + 0.10
@@ -231,7 +240,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 pieces.append(" ".join(row_pieces))
             text = "".join(pieces)
             events.append(
-                f"Dialogue: 0,{ass_time(word_start - start_s)},{ass_time(min(end_s, word_end) - start_s)},"
+                f"Dialogue: 0,{ass_time(word_start - start_s)},{ass_time(min(line_end, word_end) - start_s)},"
                 f"Clip,,0,0,0,,{text}"
             )
     return header + "\n".join(events) + "\n"

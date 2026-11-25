@@ -16,10 +16,12 @@ from ..storage.db import now
 from .context import build_context
 from .jobs import JobManager
 from .methods import analysis as analysis_methods
+from .methods import captions as caption_methods
 from .methods import projects as project_methods
 from .methods import providers as provider_methods
 from .methods import render as render_methods
 from .methods import system as system_methods
+from .methods import timeline as timeline_methods
 from .registry import Registry
 from .schemas import ErrorPayload, Event, Request, Response
 
@@ -39,6 +41,8 @@ class EngineApp:
         project_methods.register(self.registry)
         provider_methods.register(self.registry)
         analysis_methods.register(self.registry)
+        caption_methods.register(self.registry)
+        timeline_methods.register(self.registry)
         render_methods.register(self.registry)
         from .job_handlers import register_jobs
 

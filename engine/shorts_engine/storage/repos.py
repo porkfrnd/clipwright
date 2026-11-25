@@ -549,6 +549,18 @@ DEFAULT_EDIT = {
         "maxLines": 2,
         "uppercase": True,
         "hideFillers": False,
+        # Nudge subtitles relative to the measured audio. Positive moves them
+        # later. Line offsets are keyed by the source start in milliseconds.
+        "offsetMs": 0.0,
+        "lineOffsetsMs": {},
+        "safeZone": "none",
+        "safePreset": "lower_third",
+        "tighten": {
+            "enabled": False,
+            "pauseThresholdS": 0.6,
+            "minPauseS": 0.25,
+            "removeFillers": False,
+        },
     },
     "effects": {
         "enabled": False,

@@ -13,6 +13,7 @@ from ..params import (
     CandidateStatusParams,
     CandidateUpdateBoundsParams,
     CandidatesListParams,
+    CompareStartParams,
     EditSetParams,
     MetadataGenerateParams,
     SelectionIdParams,
@@ -32,6 +33,7 @@ def register(registry: Registry) -> None:
     registry.add("analysis.start", AnalysisStartParams, analysis_start)
     registry.add("analysis.estimate", AnalysisEstimateParams, analysis_estimate)
     registry.add("analysis.list", AnalysisListParams, analysis_list)
+    registry.add("analysis.compare", CompareStartParams, analysis_compare)
     registry.add("candidates.list", CandidatesListParams, candidates_list)
     registry.add("candidates.update_bounds", CandidateUpdateBoundsParams, candidates_update_bounds)
     registry.add("candidates.revisions", CandidateIdParams, candidates_revisions)
@@ -180,6 +182,113 @@ async def analysis_estimate(app, params: AnalysisEstimateParams, secrets) -> dic
         "transcriptTokens": transcript_tokens,
         "durationMinutes": round(float(source.get("durationS") or 0) / 60, 1),
         "note": "Estimate only. Actual usage and rate limits come from the provider response headers.",
+    }
+
+
+
+async def analysis_compare(app, params: CompareStartParams, secrets) -> dict[str, Any]:
+    """Run two provider/model combinations on the cached transcript.
+
+    Nothing is persisted: comparison runs cannot create analysis runs or
+    candidates. The caller can explicitly start a normal analysis afterwards.
+    """
+    source = app.ctx.sources.get(params.sourceId)
+    if not source:
+        raise EngineError("SOURCE_NOT_FOUND", "That source no longer exists.")
+    transcript = _transcript_for(app, params.transcriptId, params.sourceId)
+    if not transcript:
+        raise EngineError("TRANSCRIPT_NOT_FOUND", "Transcribe the source before comparing providers.")
+    profile_a = get_profile(app, params.profileAId)
+    profile_b = get_profile(app, params.profileBId)
+    key_a = resolve_key(profile_a, secrets)
+    key_b = resolve_key(profile_b, secrets)
+    adapter_a = make_adapter(profile_a, key_a, params.modelA, app=app)
+    adapter_b = make_adapter(profile_b, key_b, params.modelB, app=app)
+    settings = app.ctx.settings.get("analysis", {})
+    raw_options = {**settings, **(params.options or {})}
+    normalized = {
+        "max_candidates_per_window": int(raw_options.get("maxCandidatesPerWindow", 5)),
+        "window_seconds": float(raw_options.get("windowSeconds", 360)),
+        "overlap": float(raw_options.get("overlap", 0.22)),
+        "min_duration": float(raw_options.get("minDuration", 15)),
+        "max_duration": float(raw_options.get("maxDuration", 90)),
+        "rank_with_ai": bool(raw_options.get("rankWithAi", True)),
+        "batch_size": max(1, min(4, int(raw_options.get("batchSize", 2)))),
+    }
+    from ...discovery.pipeline import AnalysisHooks, AnalysisOptions, DiscoveryPipeline
+    import asyncio
+
+    async def run_one(profile, adapter, model):
+        pipeline = DiscoveryPipeline(
+            runs=app.ctx.runs,
+            candidates=app.ctx.candidates,
+            transcripts=app.ctx.transcripts,
+            sources=app.ctx.sources,
+        )
+        hooks = AnalysisHooks(cancel=asyncio.Event())
+        result = await pipeline.run(
+            source=source,
+            transcript=transcript,
+            adapter=adapter,
+            provider_profile_id=profile["id"],
+            model=model,
+            options=AnalysisOptions(**normalized),
+            hooks=hooks,
+            persist=False,
+        )
+        candidates = result.get("candidates") or []
+        durations = [float(c.get("endS", c.get("end_s", 0))) - float(c.get("startS", c.get("start_s", 0))) for c in candidates]
+        avg_fit = sum(float(c.get("fitScore", c.get("fit_score", 0))) for c in candidates) / max(1, len(candidates))
+        return {
+            "providerId": profile["id"],
+            "provider": profile["name"],
+            "adapter": profile.get("adapter"),
+            "model": model,
+            "candidateCount": len(candidates),
+            "avgFit": round(avg_fit, 1),
+            "avgDurationS": round(sum(durations) / max(1, len(durations)), 1),
+            "minDurationS": round(min(durations), 1) if durations else 0,
+            "maxDurationS": round(max(durations), 1) if durations else 0,
+            "tokens": int(result.get("tokens") or 0),
+            "windows": int(result.get("windows") or 0),
+            "batches": int(result.get("batches") or 0),
+            "candidates": [
+                {
+                    "title": c.get("title"),
+                    "startS": c.get("startS", c.get("start_s")),
+                    "endS": c.get("endS", c.get("end_s")),
+                    "fitScore": c.get("fitScore", c.get("fit_score")),
+                    "category": c.get("category"),
+                }
+                for c in candidates
+            ],
+            "persisted": False,
+        }
+
+    try:
+        result_a = await run_one(profile_a, adapter_a, params.modelA)
+    except Exception as exc:
+        result_a = {"providerId": profile_a["id"], "provider": profile_a["name"], "model": params.modelA, "error": str(exc)[:400]}
+    try:
+        result_b = await run_one(profile_b, adapter_b, params.modelB)
+    except Exception as exc:
+        result_b = {"providerId": profile_b["id"], "provider": profile_b["name"], "model": params.modelB, "error": str(exc)[:400]}
+    winner = None
+    if "error" not in result_a and "error" not in result_b:
+        score_a = result_a["avgFit"] + min(10, result_a["candidateCount"]) * 0.5
+        score_b = result_b["avgFit"] + min(10, result_b["candidateCount"]) * 0.5
+        winner = result_a if score_a >= score_b else result_b
+    return {
+        "a": result_a,
+        "b": result_b,
+        "recommended": winner["providerId"] if winner else None,
+        "recommendation": (
+            f"{winner['provider']} · {winner['model']} found {winner['candidateCount']} candidates at a mean fit of {winner['avgFit']}."
+            if winner
+            else "One provider failed, so no recommendation is possible."
+        ),
+        "persisted": False,
+        "disclosure": "Comparison runs are not saved. Candidate text is AI-generated; nothing was written to this project.",
     }
 
 

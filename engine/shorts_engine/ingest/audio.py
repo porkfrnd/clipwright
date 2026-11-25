@@ -37,6 +37,32 @@ class AudioTools:
             )
         return out_path
 
+    async def extract_window(
+        self,
+        source: Path,
+        out_path: Path,
+        *,
+        start_s: float,
+        duration_s: float,
+        cancel=None,
+    ) -> Path:
+        """Extract a short mono 16 kHz WAV window for local analysis."""
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        args = [
+            *ffmpeg_command(self.bins), "-hide_banner", "-nostdin", "-y",
+            "-ss", f"{max(0.0, start_s):.3f}", "-t", f"{max(0.05, duration_s):.3f}",
+            "-i", str(source), "-vn", "-ac", "1", "-ar", "16000",
+            "-c:a", "pcm_s16le", str(out_path),
+        ]
+        result = await self.runner.run(args, cancel=cancel, timeout=300)
+        if result.returncode != 0 or not out_path.exists():
+            raise EngineError(
+                "AUDIO_EXTRACT_FAILED",
+                "The audio window could not be read for sync checking.",
+                details={"ffmpeg": result.stderr[-800:]},
+            )
+        return out_path
+
     async def chunk(
         self,
         audio: Path,

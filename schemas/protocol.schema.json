@@ -3,6 +3,7 @@
   "title": "Clipwright engine protocol v1",
   "protocolVersion": 1,
   "methods": {
+    "analysis.compare": "CompareStartParams",
     "analysis.estimate": "AnalysisEstimateParams",
     "analysis.list": "AnalysisListParams",
     "analysis.start": "AnalysisStartParams",
@@ -64,6 +65,57 @@
     "transcription.start": "TranscriptionStartParams"
   },
   "$defs": {
+    "CompareStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "profileAId": {
+          "title": "Profileaid",
+          "type": "string"
+        },
+        "modelA": {
+          "title": "Modela",
+          "type": "string"
+        },
+        "profileBId": {
+          "title": "Profilebid",
+          "type": "string"
+        },
+        "modelB": {
+          "title": "Modelb",
+          "type": "string"
+        },
+        "transcriptId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transcriptid"
+        },
+        "options": {
+          "additionalProperties": true,
+          "title": "Options",
+          "type": "object"
+        }
+      },
+      "required": [
+        "sourceId",
+        "profileAId",
+        "modelA",
+        "profileBId",
+        "modelB"
+      ],
+      "title": "CompareStartParams",
+      "type": "object"
+    },
     "AnalysisEstimateParams": {
       "additionalProperties": false,
       "properties": {

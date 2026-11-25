@@ -271,7 +271,13 @@ class YtDlp:
         out_dir.mkdir(parents=True, exist_ok=True)
         args = [
             *self._base_args(),
-            "-f", "ba[abr<=96]/ba/worstaudio",
+            # Some direct media URLs expose a single muxed stream and no
+            # audio-only format. Fall back to the best muxed stream and let
+            # FFmpeg extract its audio instead of failing the whole job.
+            "-f", "ba[abr<=96]/ba/worstaudio/b",
+            "-x",
+            "--audio-format", "m4a",
+            "--audio-quality", "5",
             "-o", str(out_dir / "audio.%(ext)s"),
             "--", url,
         ]
@@ -316,7 +322,10 @@ class YtDlp:
             *self._client_args(client),
             "-f", _progressive_format(max_height) if progressive else _video_format(max_height),
             "--download-sections", section,
-            "--no-force-keyframes-at-cuts",
+            # Exact cuts matter: subtitle and audio timing are anchored to the
+            # requested source time. Without this yt-dlp starts at an earlier
+            # keyframe and rendered captions drift late by that gap.
+            "--force-keyframes-at-cuts",
             "--merge-output-format", "mp4",
             "-o", str(out_dir / "section.%(ext)s"),
             "--", url,
@@ -442,7 +451,11 @@ class YtDlp:
                 "-ss", f"{max(0.0, start_s):.3f}",
                 "-t", f"{duration:.3f}",
                 "-i", str(full),
-                "-c", "copy", "-avoid_negative_ts", "make_zero",
+                # Re-encode the fallback cut so the first frame is the requested
+                # moment rather than the preceding keyframe. This path is rare
+                # and only used when networked FFmpeg downloads fail.
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-c:a", "aac", "-b:a", "160k", "-avoid_negative_ts", "make_zero",
                 str(output),
             ],
             cancel=cancel,

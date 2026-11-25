@@ -2,7 +2,7 @@
 
 ## Public release
 
-[v0.1.1 on GitHub](https://github.com/porkfrnd/clipwright/releases/tag/v0.1.1)
+[v0.2.0 on GitHub](https://github.com/porkfrnd/clipwright/releases/tag/v0.2.0)
 
 ## Artifacts (this build)
 
@@ -11,8 +11,8 @@ Built on 2026-11-25 with Electron 45.4.1, electron-builder 26.18.0, PyInstaller 
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `release/Clipwright-0.1.1-x86_64.AppImage` | 482 MiB | `12dfca4190c9ad53bf6d44be860f8aeccfd1b799a9448699be3dab07f87d9d01` |
-| `release/Clipwright-0.1.1-amd64.deb` | 391 MiB | `363c7484c2ed2771842ba5f0940afdd131745a75d64e6f8772c42d92ee487e86` |
+| `release/Clipwright-0.2.0-x86_64.AppImage` | 482 MiB | `331a93436f88305fe0854a46f7aea1fab633615c4bb0f6aafc6623580e428702` |
+| `release/Clipwright-0.2.0-amd64.deb` | 391 MiB | `9e5d8fc08b5c30c92f2e40d54a26a85b92089c822b019561e9d337b11d1dda10` |
 | `release/linux-unpacked/` | 1.3 GiB | directory |
 
 Breakdown of the unpacked app:
@@ -76,11 +76,11 @@ The engine can be used without Electron:
 ## Run
 
 ```bash
-chmod +x Clipwright-0.1.1-x86_64.AppImage
-./Clipwright-0.1.1-x86_64.AppImage
+chmod +x Clipwright-0.2.0-x86_64.AppImage
+./Clipwright-0.2.0-x86_64.AppImage
 
 # or
-sudo apt install ./Clipwright-0.1.1-amd64.deb
+sudo apt install ./Clipwright-0.2.0-amd64.deb
 clipwright
 ```
 
@@ -105,7 +105,7 @@ packaged app. It is outside the install directory. The output folder is configur
 - The **unpacked packaged app** completed the full Playwright flow with `PATH=/tmp/emptybin`:
   wizard → local import → real tiny Whisper transcription → stub provider → analysis →
   selection → boundary edit/undo → Studio → real FFmpeg export → validation and security
-  assertions. It passed in 51.4 seconds. No system Python, Node, FFmpeg or yt-dlp was on
+  assertions. It passed in 54.0 seconds. No system Python, Node, FFmpeg or yt-dlp was on
   `PATH`.
 - `scripts/verify-package` launched the bundled FFmpeg/ffprobe/yt-dlp/Deno with an empty
   `PATH` and completed the frozen-engine `hello`/`ping`/`binaries.status` handshake.
@@ -148,11 +148,22 @@ license texts with the installer. `scripts/licenses` is an inventory, not legal 
 
 ## Release checklist
 
-- [x] Engine unit + integration suite passes (93 passed, 1 skipped).
+- [x] Engine unit + integration suite passes (111 passed, 1 skipped).
 - [x] Desktop typecheck and Vitest pass (33 tests).
-- [x] Playwright dev suite passes (3 tests): long local flow, cloud rate-limit wait, and update
-  checker states.
-- [x] Packaged unpacked app passes the long local flow with an empty `PATH` (51.4 s).
+- [x] Playwright dev suite passes (4 tests): long local flow, URL import/download/transcribe,
+  cloud rate-limit wait, and update checker states.
+- [x] Packaged unpacked app passes the long local flow with an empty `PATH` (54.0 s).
+- [x] Subtitle timing integration test burns ASS at source 0 s and 2 s and requires the first
+  caption frame within one 30 fps frame.
+- [x] Caption Sync Assistant estimates a synthetic ±60/±120/±180 ms shift within 20 ms and
+  refuses sparse evidence; 6 s preview uses the export ASS path.
+- [x] Tightener dry-run computes keep ranges and planned duration; render removes pauses and
+  standalone fillers with 30 ms audio fades and no video transition.
+- [x] Provider comparison runs two read-only passes with `persist=False`; Playwright drives the
+  modal and confirms two result columns and the recommendation.
+- [x] TikTok/Reels/Shorts safe-zone overlays render as guides only, with no export changes.
+- [x] URL import test serves real media over HTTP, downloads with bundled yt-dlp (including the
+  muxed-stream fallback), and obtains a local Whisper transcript.
 - [x] Frozen engine URL metadata import against a real YouTube URL.
 - [x] Packaged URL preview (H.264 640×360) after the FFmpeg/network fix.
 - [x] Packaged URL preview cache hit and real 1080×1920 URL render with burned-in subtitles.
@@ -173,7 +184,7 @@ license texts with the installer. `scripts/licenses` is an inventory, not legal 
 - [x] `scripts/verify-package` passes.
 - [x] `scripts/benchmark` writes measured numbers to `docs/BENCHMARKS.md`.
 - [x] Update checker passes available/current/error states against a local GitHub API stub; the
-  packaged 0.1.1 build reports the public release as current.
+  packaged 0.2.0 build reports the public release as current once v0.2.0 is published.
 - [x] Cloud transcription resolves a camelCase provider profile and surfaces a 429 as a
   checkpointed wait with a live countdown; covered by `tests/rate-limit.spec.ts`.
 - [x] Screenshot set re-captured from real Electron windows, all themes/states.

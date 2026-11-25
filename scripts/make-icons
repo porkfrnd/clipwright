@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Regenerate the desktop icon set from resources/icons/icon.svg.
+# The SVG is the source of truth; PNG and ICO are build artifacts for Electron.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SRC="$ROOT/resources/icons/icon.svg"
+PNG="$ROOT/resources/icons/icon.png"
+ICO="$ROOT/resources/icons/icon.ico"
+PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
+
+command -v rsvg-convert >/dev/null || { echo "rsvg-convert is required" >&2; exit 1; }
+[ -x "$PYTHON" ] || PYTHON=python3
+
+rsvg-convert -w 512 -h 512 "$SRC" -o "$PNG"
+"$PYTHON" - "$PNG" "$ICO" <<'PY'
+import sys
+from PIL import Image
+image = Image.open(sys.argv[1]).convert("RGBA")
+image.save(sys.argv[2], format="ICO", sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+PY
+echo "wrote $PNG and $ICO"

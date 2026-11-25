@@ -1,4 +1,5 @@
 {
+  "analysis.compare": "CompareStartParams",
   "analysis.estimate": "AnalysisEstimateParams",
   "analysis.list": "AnalysisListParams",
   "analysis.start": "AnalysisStartParams",

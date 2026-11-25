@@ -361,3 +361,39 @@ prompt/overlap cost. Batching can produce fewer candidates per source, and a bat
 to fit the provider's context and TPM. This is not a way to exceed quota; the app continues to
 wait and resume when a provider is genuinely rate-limited. Local Qwen remains the unlimited
 offline fallback.
+
+
+## 2026-11-25 — v2 timing and editing decisions
+
+### Subtitle timing is measured, not assumed
+
+The engine refuses to treat a requested clip start as the downloaded file's zero. The container
+start time is probed after the download and stored with the manifest. Subtitle offsets are stored
+in `edit_settings.subtitles` as a global `offsetMs` plus a per-line map keyed by the original
+line start in milliseconds. Positive values move captions later. The key is stable across style
+changes and repeated renders.
+
+### Caption sync is local, confidence-gated, and non-destructive
+
+Audio onset analysis runs on the machine; no provider call and no transcript rewrite. A shift is
+applied only when the sync check returns High confidence and a non-zero offset. The per-line
+overrides exist for a reason; the UI exposes a manual ±25 ms nudge and a reset rather than hiding
+the state.
+
+### Provider comparison is a dry run
+
+Comparison must never create a second run or surprise billing beyond the two explicitly requested
+provider calls. `persist=False` is passed all the way through the discovery pipeline. The chosen
+provider is only persisted when the user starts a normal analysis from the result.
+
+### Tightening edits only silence and standalone fillers
+
+The tightener is opt-in, previewed as a cut list and a before/after duration, and applied to the
+source timeline at render time. It does not rewrite the transcript or alter spoken words. Audio
+fades are 30 ms at cut boundaries; video is hard-cut. Calling it a crossfade would be false.
+
+### Safe zones are guides, not burned-in chrome
+
+Platform overlays are renderer-only measurement aids. They are excluded from export and do not
+intercept pointer events. If a future version needs burned-in safe areas, that is a separate,
+explicit export option.

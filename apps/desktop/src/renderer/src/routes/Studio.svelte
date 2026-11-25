@@ -6,6 +6,7 @@
   import Button from '$components/Button.svelte'
   import Player from '$components/Player.svelte'
   import SubtitlePreview from '$components/SubtitlePreview.svelte'
+  import SafeZoneOverlay from '$components/SafeZoneOverlay.svelte'
   import { timecode, durationLabel, bytesLabel, categoryMeta } from '$lib/categories'
   import type { Selection, EditSettings } from '$shared/types'
 
@@ -39,6 +40,16 @@
   let saveTimer: ReturnType<typeof setTimeout> | null = null
   let saving = $state(false)
   let musicPath = $state('')
+  let syncBusy = $state(false)
+  let syncError = $state<string | null>(null)
+  let syncResult = $state<any>(null)
+  let syncPreviewUrl = $state<string | null>(null)
+  let syncPreviewBusy = $state(false)
+  let syncPreviewOffset = $state(0)
+  let tightenPlan = $state<any>(null)
+  let tightenBusy = $state(false)
+  let tightenError = $state<string | null>(null)
+  let showSafeZones = $state(false)
 
   const active = $derived(selections.find((s) => s.id === activeId) || selections[0] || null)
   const activeSource = $derived(active ? sources.find((s) => s.id === active.candidate.sourceId) : null)
@@ -95,6 +106,11 @@
   }
 
   async function loadClip(selection: Selection) {
+    syncResult = null
+    syncError = null
+    syncPreviewUrl = null
+    tightenPlan = null
+    tightenError = null
     const source = sources.find((s) => s.id === selection.candidate.sourceId)
     const transcriptResult = await request('transcript.get', { sourceId: selection.candidate.sourceId }).catch(() => null)
     transcript = transcriptResult?.transcript || null
@@ -203,6 +219,159 @@
     }
   }
 
+
+  async function flushSave() {
+    if (!active || !edit) return
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    const selectionId = active.id
+    const payload = edit
+    saving = true
+    try {
+      const result = await request('edit.set', { selectionId, settings: payload })
+      if (active?.id === selectionId) {
+        edit = result.edit
+        active.edit = result.edit
+      }
+    } finally {
+      saving = false
+    }
+  }
+
+  function playheadS(): number {
+    if (!active) return 0
+    const absolute = currentTime + previewOffset
+    return Math.max(active.candidate.startS, Math.min(absolute, active.candidate.endS - 2))
+  }
+
+  async function loadSyncPreview(startS: number, offsetMs: number) {
+    if (!active) return
+    syncPreviewBusy = true
+    try {
+      const result = await request('captions.preview', {
+        selectionId: active.id,
+        startS,
+        durationS: 6,
+        offsetMs
+      })
+      syncPreviewUrl = result.mediaUrl
+      syncPreviewOffset = Number(result.offsetMs || offsetMs)
+    } catch (err) {
+      syncPreviewUrl = null
+      toast('error', errorText(err))
+    } finally {
+      syncPreviewBusy = false
+    }
+  }
+
+  async function checkSync() {
+    if (!active || !edit) return
+    syncBusy = true
+    syncError = null
+    syncResult = null
+    syncPreviewUrl = null
+    const selectionId = active.id
+    const startS = playheadS()
+    try {
+      const result = await request('captions.sync_check', {
+        selectionId,
+        startS,
+        durationS: 6
+      })
+      if (active?.id !== selectionId) return
+      syncResult = result
+      await loadSyncPreview(result.windowStartS, Number(edit.subtitles.offsetMs || 0))
+    } catch (err) {
+      if (active?.id === selectionId) syncError = errorText(err)
+    } finally {
+      syncBusy = false
+    }
+  }
+
+  async function applySync() {
+    if (!syncResult || !active) return
+    update('subtitles', 'offsetMs', syncResult.offsetMs)
+    try {
+      await flushSave()
+      await loadSyncPreview(syncResult.windowStartS, syncResult.offsetMs)
+      toast('success', `Subtitle timing shifted by ${syncResult.offsetMs > 0 ? '+' : ''}${syncResult.offsetMs} ms.`)
+    } catch (err) {
+      toast('error', errorText(err))
+    }
+  }
+
+  async function resetSync() {
+    if (!active || !edit) return
+    edit = {
+      ...edit,
+      subtitles: { ...edit.subtitles, offsetMs: 0, lineOffsetsMs: {} }
+    }
+    try {
+      await flushSave()
+      if (syncResult?.windowStartS != null) {
+        await loadSyncPreview(syncResult.windowStartS, 0)
+      }
+      toast('success', 'Caption timing reset to source time.')
+    } catch (err) {
+      toast('error', errorText(err))
+    }
+  }
+
+  async function nudgeSync(delta: number) {
+    if (!edit || !active) return
+    const next = Math.max(-1000, Math.min(1000, Number(edit.subtitles.offsetMs || 0) + delta))
+    update('subtitles', 'offsetMs', next)
+    try {
+      await flushSave()
+      if (syncResult?.windowStartS != null) await loadSyncPreview(syncResult.windowStartS, next)
+    } catch (err) {
+      toast('error', errorText(err))
+    }
+  }
+
+
+  function setTighten(key: string, value: any) {
+    if (!edit) return
+    const current = edit.subtitles.tighten || { enabled: false, pauseThresholdS: 0.6, minPauseS: 0.25, removeFillers: false }
+    edit = { ...edit, subtitles: { ...edit.subtitles, tighten: { ...current, [key]: value } } }
+    tightenPlan = null
+    scheduleSave()
+  }
+
+  async function reviewTighten() {
+    if (!active || !edit) return
+    tightenBusy = true
+    tightenError = null
+    const selectionId = active.id
+    const config = edit.subtitles.tighten
+    try {
+      const plan = await request('timeline.plan', {
+        selectionId,
+        pauseThresholdS: config.pauseThresholdS,
+        minPauseS: config.minPauseS,
+        removeFillers: config.removeFillers
+      })
+      if (active?.id === selectionId) tightenPlan = plan
+    } catch (err) {
+      if (active?.id === selectionId) tightenError = errorText(err)
+    } finally {
+      tightenBusy = false
+    }
+  }
+
+  async function applyTighten() {
+    if (!tightenPlan?.supported) return
+    setTighten('enabled', true)
+    try {
+      await flushSave()
+      toast('success', `Tighten on: ${tightenPlan.removedS.toFixed(1)}s of dead air will be removed on export.`)
+    } catch (err) {
+      toast('error', errorText(err))
+    }
+  }
+
   async function chooseOutput() {
     const folder = await window.clipwright.chooseFolder()
     if (!folder) return
@@ -303,6 +472,14 @@
           <div class="eyebrow">Studio</div>
           <span class="pill" style={`--cat-color:${categoryMeta(active.candidate.category).color};color:${categoryMeta(active.candidate.category).color}`}>{categoryMeta(active.candidate.category).label}</span>
           {#if saving}<span class="pill">saving…</span>{/if}
+          <span class={`pill ${Number(edit?.subtitles.offsetMs || 0) ? "success" : ""}`} title="Measured shift applied to every subtitle line">
+            <Icon name="clock" size={11} />
+            {#if Number(edit?.subtitles.offsetMs || 0)}
+              timing {Number(edit.subtitles.offsetMs) > 0 ? "+" : ""}{edit.subtitles.offsetMs} ms
+            {:else}
+              timing at source
+            {/if}
+          </span>
         </div>
         <h1 style="margin-top:6px;max-width:840px">{active.candidate.title}</h1>
         <div class="row small muted" style="margin-top:8px">
@@ -334,9 +511,17 @@
     <div class="studio-grid">
       <div class="stack">
         <div class="card tight">
-          <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <div class="row" style="justify-content:space-between;margin-bottom:10px;gap:10px">
             <div class="eyebrow">Live preview</div>
-            <span class="tiny muted">subtitle overlay is a browser approximation of the burned render</span>
+            <div class="row" style="gap:6px">
+              <label class="check tiny"><input type="checkbox" checked={showSafeZones} onchange={(e) => (showSafeZones = (e.currentTarget as HTMLInputElement).checked)} /><span>Safe zones</span></label>
+              <select class="select compact" aria-label="Platform safe-zone preset" value={edit.subtitles.safeZone || "none"} onchange={(e) => update("subtitles", "safeZone", (e.currentTarget as HTMLSelectElement).value)}>
+                <option value="none">No platform</option>
+                <option value="tiktok">TikTok</option>
+                <option value="reels">Reels</option>
+                <option value="shorts">Shorts</option>
+              </select>
+            </div>
           </div>
           <div
             bind:clientWidth={previewFrameWidth}
@@ -362,6 +547,7 @@
                 style={edit.subtitles}
                 scale={previewFrameWidth ? previewFrameWidth / 1080 : 0.398}
               />
+              <SafeZoneOverlay platform={edit.subtitles.safeZone || "none"} visible={showSafeZones} />
             {/if}
           </div>
         </div>
@@ -500,6 +686,62 @@
           {#if transcript?.wordTiming === 'approximate'}
             <div class="notice warn" style="margin-top:10px">Word timing is approximate, so the Studio highlights whole phrases instead of pretending to know each word's exact frame.</div>
           {/if}
+          {#if edit.subtitles.safeZone !== "none" && edit.subtitles.position !== "center"}
+            <div class="notice warn" style="margin-top:10px">
+              The lower caption band can sit under {edit.subtitles.safeZone === "shorts" ? "Shorts" : edit.subtitles.safeZone === "reels" ? "Reels" : "TikTok"} controls. Center captions stay inside the reserved frame.
+              <div class="row" style="margin-top:6px"><button class="link tiny" onclick={() => update("subtitles", "position", "center")}>Move captions to center</button></div>
+            </div>
+          {/if}
+          <div class="timing-panel">
+            <div class="spread">
+              <div>
+                <div class="eyebrow">Timing</div>
+                <h4>Caption sync assistant</h4>
+              </div>
+              <Button size="sm" variant="ghost" onclick={checkSync} disabled={syncBusy}>
+                {#if syncBusy}<Icon name="loader" size={13} /> Listening…{:else}<Icon name="clock" size={13} /> Check sync{/if}
+              </Button>
+            </div>
+            <p class="tiny muted">
+              Compares word onsets with local audio energy at the playhead. Runs on this device — nothing is uploaded.
+            </p>
+            {#if syncError}
+              <div class="notice error tiny">{syncError}</div>
+            {/if}
+            {#if syncBusy}
+              <div class="timing-skeleton" aria-hidden="true"><span></span><span></span></div>
+            {:else if syncResult}
+              <div class="timing-result">
+                <div class="timing-number">
+                  <strong>{syncResult.offsetMs > 0 ? "+" : ""}{syncResult.offsetMs}<span>ms</span></strong>
+                  <div>
+                    <span class={`pill ${syncResult.confidence === "High" ? "success" : "warn"}`}>{syncResult.confidence}</span>
+                    <div class="tiny muted">{syncResult.wordsUsed} words · {syncResult.checkedS}s window</div>
+                  </div>
+                </div>
+                <p class="tiny muted" style="margin:0">{syncResult.method}</p>
+                <div class="row" style="margin-top:10px">
+                  <Button size="sm" variant="primary" onclick={applySync} disabled={syncResult.offsetMs === 0 || syncResult.confidence !== "High"}>Apply shift</Button>
+                  <Button size="sm" variant="ghost" onclick={() => nudgeSync(-40)}>−40 ms</Button>
+                  <Button size="sm" variant="ghost" onclick={() => nudgeSync(40)}>+40 ms</Button>
+                  <button class="link tiny" onclick={resetSync}>Reset</button>
+                </div>
+              </div>
+              {#if syncPreviewBusy}
+                <div class="sync-preview loading"><Icon name="loader" size={20} /><span>Rendering a 6-second check…</span></div>
+              {:else if syncPreviewUrl}
+                <div class="sync-preview">
+                  <video src={syncPreviewUrl} controls playsinline preload="metadata">
+                    <track kind="captions" label="Burned-in subtitle preview" srclang="en" />
+                  </video>
+                  <div class="spread tiny muted">
+                    <span>Burned-in check · {syncPreviewOffset > 0 ? "+" : ""}{syncPreviewOffset} ms</span>
+                    <span>local render</span>
+                  </div>
+                </div>
+              {/if}
+            {/if}
+          </div>
         </div>
 
         <div class="control-group">
@@ -509,6 +751,47 @@
             <label class="check"><input type="checkbox" checked={edit.effects.progressBar} onchange={(e) => update('effects', 'progressBar', (e.currentTarget as HTMLInputElement).checked)} /><span>Progress bar</span></label>
             <label class="check"><input type="checkbox" checked={edit.effects.cinematic} onchange={(e) => update('effects', 'cinematic', (e.currentTarget as HTMLInputElement).checked)} /><span>Mild cinematic contrast and vignette</span></label>
             <p class="tiny muted">Defaults are restrained. The Minimal preset turns all of this off.</p>
+          </div>
+          <div class="tighten-panel">
+            <div class="spread">
+              <div>
+                <h4>Pause & filler tightener</h4>
+                <p class="tiny muted">Removes dead air and opted-in filler words from the export. Source and transcript stay untouched.</p>
+              </div>
+              <label class="check"><input type="checkbox" checked={!!edit.subtitles.tighten?.enabled} onchange={(e) => setTighten("enabled", (e.currentTarget as HTMLInputElement).checked)} /><span>On</span></label>
+            </div>
+            <div class="form-grid" style="margin-top:10px">
+              <div class="field">
+                <label for="pause-threshold">Cut pauses longer than {Number(edit.subtitles.tighten?.pauseThresholdS || 0.6).toFixed(1)}s</label>
+                <input id="pause-threshold" class="range" type="range" min="0.4" max="2" step="0.1" value={edit.subtitles.tighten?.pauseThresholdS || 0.6} oninput={(e) => setTighten("pauseThresholdS", Number((e.currentTarget as HTMLInputElement).value))} />
+              </div>
+              <label class="check wide"><input type="checkbox" checked={!!edit.subtitles.tighten?.removeFillers} onchange={(e) => setTighten("removeFillers", (e.currentTarget as HTMLInputElement).checked)} /><span>Also remove detected fillers (um, uh, erm)</span></label>
+            </div>
+            <div class="row" style="margin-top:10px">
+              <Button size="sm" variant="ghost" onclick={reviewTighten} disabled={tightenBusy}>
+                {#if tightenBusy}<Icon name="loader" size={13} /> Reviewing…{:else}<Icon name="scissors" size={13} /> Review cuts{/if}
+              </Button>
+              {#if tightenPlan?.supported}
+                <span class="pill success">{tightenPlan.removedS.toFixed(1)}s shorter · {tightenPlan.pauses.length} pause{tightenPlan.pauses.length === 1 ? "" : "s"}{tightenPlan.fillers.length ? ` · ${tightenPlan.fillers.length} filler${tightenPlan.fillers.length === 1 ? "" : "s"}` : ""}</span>
+              {/if}
+            </div>
+            {#if tightenError}<div class="notice error tiny" style="margin-top:8px">{tightenError}</div>{/if}
+            {#if tightenPlan}
+              {#if tightenPlan.supported}
+                <div class="cut-list">
+                  {#each tightenPlan.pauses.slice(0, 6) as pause}
+                    <div class="cut-row"><span class="mono">{timecode(pause.startS)}</span><span class="truncate">… {pause.context}</span><span class="mono">−{pause.durationS.toFixed(2)}s</span></div>
+                  {/each}
+                  {#if tightenPlan.pauses.length > 6}<div class="tiny muted">+ {tightenPlan.pauses.length - 6} more pauses</div>{/if}
+                </div>
+                <div class="row" style="margin-top:10px">
+                  <Button size="sm" variant="primary" onclick={applyTighten} disabled={!!edit.subtitles.tighten?.enabled}>Turn on tighten</Button>
+                  <span class="tiny muted">Before {tightenPlan.originalDurationS.toFixed(1)}s → after {tightenPlan.plannedDurationS.toFixed(1)}s</span>
+                </div>
+              {:else}
+                <div class="notice tiny" style="margin-top:8px">{tightenPlan.reason}</div>
+              {/if}
+            {/if}
           </div>
         </div>
 

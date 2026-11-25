@@ -55,6 +55,39 @@ def test_ass_highlight_each_word_and_correct_offsets():
     assert "{\\c&H007BC7E8}THE" in events[1]
 
 
+def test_ass_global_offset_moves_every_event_without_drift():
+    base = build_ass(segments=segments(), start_s=1.0, end_s=4.3, style=STYLE)
+    shifted = build_ass(segments=segments(), start_s=1.0, end_s=4.3, style=STYLE, offset_ms=120)
+    base_events = [line for line in base.splitlines() if line.startswith("Dialogue:")]
+    shifted_events = [line for line in shifted.splitlines() if line.startswith("Dialogue:")]
+    assert len(base_events) == len(shifted_events) == 7
+    assert "0:00:00.12" in shifted_events[0]
+    assert "0:00:00.42" in shifted_events[0]
+    # The last word still ends at the clip boundary, not beyond it.
+    assert shifted_events[-1].split(",")[2] == "0:00:03.30"
+
+
+def test_ass_per_line_offset_applies_to_the_matching_line_only():
+    words = [
+        {"startS": 1.0, "endS": 1.4, "text": "FIRSTWORDLONG"},
+        {"startS": 2.0, "endS": 2.4, "text": "SECONDWORDLONG"},
+    ]
+    source = [
+        {"startS": 1.0, "endS": 1.4, "text": words[0]["text"], "words": [words[0]]},
+        {"startS": 2.0, "endS": 2.4, "text": words[1]["text"], "words": [words[1]]},
+    ]
+    content = build_ass(
+        segments=source,
+        start_s=1.0,
+        end_s=3.0,
+        style={**STYLE, "maxLines": 1},
+        line_offsets_ms={"1000": -100, "2000": 80},
+    )
+    events = [line for line in content.splitlines() if line.startswith("Dialogue:")]
+    assert "0:00:00.00,0:00:00.30" in events[0]
+    assert "0:00:01.08,0:00:01.48" in events[1]
+
+
 def test_ass_approximate_word_timing_is_phrase_level():
     content = build_ass(
         segments=segments(), start_s=1.0, end_s=4.3, style=STYLE, word_timing="approximate"
@@ -159,6 +192,39 @@ def test_audio_chain_without_and_with_music():
     assert "highpass" in joined
     assert "sidechaincompress" in joined
     assert "measured_I=-22.0" in joined
+
+
+def test_timeline_filter_trims_and_crossfades_audio_only():
+    cmd = build_ffmpeg_command(
+        ffmpeg=["ffmpeg"],
+        source=Path("/tmp/source.mp4"),
+        start_s=0.0,
+        duration=4.0,
+        output=Path("/tmp/output.mp4"),
+        encoder_args=["-c:v", "libx264"],
+        has_audio=True,
+        music_path=None,
+        framing={"layout": "fill"},
+        subtitles={},
+        effects={"fade": False},
+        audio={},
+        ass_path=None,
+        fonts_dir=None,
+        measured={},
+        source_fps=30,
+        timeline={
+            "keepRanges": [{"startS": 0.0, "endS": 1.5}, {"startS": 2.25, "endS": 4.0}],
+            "fadeS": 0.03,
+        },
+    )
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "trim=start=0.000:end=1.500" in graph
+    assert "trim=start=2.250:end=4.000" in graph
+    assert "concat=n=2:v=1:a=0[vbase]" in graph
+    assert "atrim=start=0.000:end=1.500" in graph
+    assert "afade=t=in" in graph and "afade=t=out" in graph
+    assert "concat=n=2:v=0:a=1[acat]" in graph
+    assert "[acat]loudnorm" in graph
 
 
 def test_ffmpeg_command_is_argument_array():

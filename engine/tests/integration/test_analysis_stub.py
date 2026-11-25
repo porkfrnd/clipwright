@@ -136,6 +136,36 @@ async def test_analysis_pipeline_with_stub_provider(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_comparison_run_does_not_persist_runs_or_candidates(tmp_path: Path):
+    ctx, source, transcript = seed(tmp_path / "engine")
+    with StubServer() as stub:
+        adapter = OpenAICompatibleAdapter(
+            base_url=stub.base_url,
+            api_key="stub-key",
+            model="stub-model",
+            capabilities=ProviderCapabilities(supports_json_schema=True),
+        )
+        pipeline = DiscoveryPipeline(
+            runs=ctx.runs, candidates=ctx.candidates, transcripts=ctx.transcripts, sources=ctx.sources
+        )
+        result = await pipeline.run(
+            source=source,
+            transcript=transcript,
+            adapter=adapter,
+            provider_profile_id="compare-provider",
+            model="stub-model",
+            options=AnalysisOptions(min_duration=15, max_duration=90),
+            hooks=AnalysisHooks(request_log=lambda *args: None),
+            persist=False,
+        )
+    assert result["candidateCount"] >= 1
+    assert result["persisted"] is False
+    assert ctx.runs.list(source["id"]) == []
+    assert ctx.candidates.list(source["id"]) == []
+    ctx.db.close()
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_wait_then_resume_without_losing_work(tmp_path: Path):
     ctx, source, transcript = seed(tmp_path / "engine")
     with StubServer(rate_limit_once=True) as stub:

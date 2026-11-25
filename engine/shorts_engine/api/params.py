@@ -178,6 +178,36 @@ class ModelDownloadParams(Strict):
     name: str
 
 
+class CaptionSyncParams(Strict):
+    selectionId: str
+    startS: float | None = Field(default=None, ge=0, le=86400)
+    durationS: float = Field(default=6.0, ge=2.0, le=20.0)
+
+
+class CaptionPreviewParams(Strict):
+    selectionId: str
+    startS: float | None = Field(default=None, ge=0, le=86400)
+    durationS: float = Field(default=6.0, ge=2.0, le=20.0)
+    offsetMs: float = Field(default=0.0, ge=-1000, le=1000)
+
+
+class CompareStartParams(Strict):
+    sourceId: str
+    profileAId: str
+    modelA: str
+    profileBId: str
+    modelB: str
+    transcriptId: str | None = None
+    options: dict[str, Any] = Field(default_factory=dict)
+
+
+class TimelinePlanParams(Strict):
+    selectionId: str
+    pauseThresholdS: float = Field(default=0.6, ge=0.2, le=5.0)
+    minPauseS: float = Field(default=0.25, ge=0.0, le=2.0)
+    removeFillers: bool = False
+
+
 class RenderStartParams(Strict):
     projectId: str
     selectionIds: list[str] = Field(min_length=1, max_length=100)

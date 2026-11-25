@@ -6,4 +6,4 @@ scripts/gen-schemas refuses to run when they differ.
 
 PRODUCT_NAME = "Clipwright"
 PROTOCOL_VERSION = 1
-ENGINE_VERSION = "0.1.1"
+ENGINE_VERSION = "0.2.0"

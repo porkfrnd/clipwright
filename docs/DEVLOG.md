@@ -592,3 +592,104 @@ build clean with no Svelte a11y warnings; Playwright `3 passed` (rate-limit 3.8 
 flow 45.2 s, update checker 4.3 s). The rate-limit test covers the exact cloud transcription
 regression above. Screenshots `01`–`16`, `18`–`20` regenerated at 1440×900 (plus the large and
 small layout shots); the duplicate fresh-profile wizard shot was removed.
+
+
+## 2026-11-25 — Clipwright 0.2: subtitle timing, compare, sync, tighten, safe zones
+
+This pass started from a reproduction-first rule: read and record the failure before changing the
+renderer or the engine. The following were reproduced in the real app or in a deterministic test.
+
+### Subtitle timing drift (reproduced, then fixed)
+
+**Reproduction.** Render a clip whose selection starts at 2.0 s. burn the ASS into the clip, then
+extract the first frame that contains subtitle pixels. The first caption appeared earlier/later
+than the source word because the downloaded section started at a keyframe before 2.0 s while the
+ASS was built with 2.0 s as time zero. The same drift was visible in Studio preview for URL
+sources: the video clock was section-relative, the subtitle clock was source-absolute.
+
+**Root cause.** `yt-dlp --download-sections` cuts at keyframes and may include pre-roll. The
+engine assumed the requested start was the container start. Two fixes were needed and both are
+kept: `--force-keyframes-at-cuts` for exact cuts, and a fresh probe of the produced container's
+`start_time` (`start_time_s`) used as the measured offset. Manifest/cache entries carry the
+measured start so the API can build section-relative subtitle events without guessing.
+
+**Regression guard.** `engine/tests/integration/test_subtitle_timing.py` burns captions at
+source starts 0 s and 2 s, probes the output, and asserts the first subtitle frame is within one
+30 fps frame of the expected time. The Studio header shows "timing at source" or the measured
+global shift, so a silent drift is visible without opening the render.
+
+### Caption Sync Assistant (local, conservative)
+
+A local audio-RMS onset check estimates whether every caption is early or late. It looks for a
+quiet lookback and a loud lookahead around each word, scores candidate offsets, and returns the
+earliest strong plateau rather than the global maximum. This removes the +40–50 ms bias found in
+the first version. It never moves spoken audio and never rewrites the transcript: the result is a
+global `offsetMs` plus per-line overrides, stored non-destructively in `edit.settings.subtitles`.
+When word timings are missing or the score is not high-confidence, the UI refuses to apply an
+automatic shift. The 6-second 540×960 preview uses the same ASS builder as the export.
+
+Unit coverage shifts a synthetic click train by ±60/±120/±180 ms and requires the estimate to
+land within 20 ms; sparse audio returns "not enough evidence".
+
+### Pause and filler tightener (opt-in, dry-run first)
+
+`plan_timeline` removes interior pauses over a threshold and, optionally, standalone filler
+words (`um, uh, erm, hmm, mm, mhm`). It returns keep ranges, removed spans and a planned duration.
+The renderer builds a trim/concat video bus and an `atrim`/`afade` audio bus with 30 ms fades at
+each cut. This is honest about what it is: cuts with short audio fades, **not** overlapping video
+crossfades. Source files, source audio and the transcript are never modified. Studio shows a
+review list, before/after duration and the number of pauses/fillers before the user enables it.
+
+### Provider comparison
+
+`analysis.compare` runs two provider/model pairs against the **same cached transcript**, with
+`persist=False` in `DiscoveryPipeline`. It writes no run, no candidates and no project state.
+The modal shows candidate counts, mean fit, length range, tokens and the per-provider error; its
+recommendation is computed from those real results. "Analyze with this one" starts a normal
+analysis with the chosen provider, which is the only step that persists candidates. A Playwright
+assertion drives the modal through the local stub and verifies the two result columns.
+
+### Safe zones
+
+TikTok, Reels and Shorts overlays are measurement guides only: dashed frames at the documented
+top/bottom/right insets, with text labels. They are never burned into the render and never block
+pointer input.
+
+### Skip-setup race remounted Home (reproduced by the URL test)
+
+The URL test intermittently lost its open link panel after typing the URL. The page snapshot
+showed a fresh Home with the panel closed. Root cause: `finishWizard()` closed the wizard and
+revealed the shell immediately, then awaited `settings.set` and `refreshBoot()`, and only after
+those finished called `setRoute('home')`. During that window the user could already type; the
+delayed route assignment remounted Home and discarded local state. The fix sets the route before
+the settings round-trip. Three consecutive URL tests passed after the change.
+
+### Direct-media import bug found by the new Playwright test
+
+The first URL-download test served a direct `lecture.mp4` over HTTP. Import metadata succeeded,
+but transcription failed with `Requested format is not available` because `download_audio()`
+asked only for audio-only formats and a direct MP4 has a single muxed stream. The fix falls back
+to `b` and extracts M4A audio with FFmpeg. The test now imports the URL, downloads through
+yt-dlp and gets a real local Whisper transcript in **16.8 s**.
+
+### Design direction
+
+The shell moved from the editorial serif "cutting room" to a private productivity desk: 248 px
+rail, 64 px top bar, near-black graphite, Inter display, gold accent, 18–20 px workspace cards
+and pill actions. Home is a real dashboard: hero copy, an active-project bench card, a four-step
+cut rail, a KPI band of actual counts, a file/link start panel and recent projects. The supplied
+film-frame "C" is used in the rail, boot leader and desktop icon set. The loading sheet remains a
+film leader and now uses the same type and mark.
+
+The updates page, project workspace, discovery cards and Studio were retained and restyled, not
+rebuilt; all existing flows still pass their tests. No fake growth metric, no invented
+percentage, no decorative AI imagery.
+
+### Verification in this pass
+
+```text
+Engine tests                 111 passed, 1 skipped (67.2 s)
+Desktop build + unit tests    clean; 33 unit tests passed
+Playwright suite             4 passed (1.4 m): local flow, URL download, update, rate limit
+Screenshots                  19 regenerated at 1440×900 plus loading and safe-zone shots
+```

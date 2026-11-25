@@ -7,6 +7,7 @@
   import CategoryPill from '$components/CategoryPill.svelte'
   import CandidateCard from '$components/CandidateCard.svelte'
   import MomentMap from '$components/MomentMap.svelte'
+  import ProviderCompare from '$components/ProviderCompare.svelte'
   import Player from '$components/Player.svelte'
   import { CATEGORIES, categoryMeta, durationLabel, timecode } from '$lib/categories'
   import type { Candidate, SourceSummary } from '$shared/types'
@@ -49,6 +50,7 @@
   let providerModels = $state<any[]>([])
   let providerProfileId = $state<string | null>(null)
   let analysisModel = $state('')
+  let analysisTarget = $state<{ profileId: string; model: string } | null>(null)
   let estimate = $state<any>(null)
   let estimateBusy = $state(false)
 
@@ -105,6 +107,8 @@
   const allCategories = $derived([...new Set(candidates.flatMap((c) => c.categories?.length ? c.categories : [c.category]))])
   const selectedCandidates = $derived(candidates.filter((c) => selectedIds.includes(c.id)))
   const defaultProfile = $derived(appState.providers.find((p) => p.id === (appState.defaultProfileId || appState.providers[0]?.id)))
+  const disclosureProfile = $derived(appState.providers.find((p) => p.id === analysisTarget?.profileId) || defaultProfile)
+  const disclosureModel = $derived(analysisTarget?.model || analysisModel)
   const sourceThumb = $derived(assets.find((a) => a.kind === 'thumb')?.mediaUrl)
   const transcriptRange = $derived(
     picked
@@ -346,6 +350,11 @@
     }
   }
 
+  function askAnalysisWith(profileId: string, model: string) {
+    analysisTarget = { profileId, model }
+    askAnalysis()
+  }
+
   function askAnalysis() {
     if (!defaultProfile) {
       toast('error', 'Add an AI provider in Settings first.')
@@ -377,10 +386,11 @@
   async function runAnalysis() {
     jobError = null
     try {
+      const target = analysisTarget || { profileId: defaultProfile?.id, model: analysisModel }
       const job = await request('analysis.start', {
         sourceId: source.id,
-        providerProfileId: defaultProfile?.id,
-        model: analysisModel,
+        providerProfileId: target.profileId,
+        model: target.model,
         options: {
           maxCandidatesPerWindow: appState.settings?.analysis.maxCandidatesPerWindow || 5,
           rankWithAi: appState.settings?.analysis.rankWithAi ?? true
@@ -827,9 +837,17 @@
             </div>
           </div>
           <div class="row" style="margin-top:18px">
-            <Button variant="primary" onclick={askAnalysis} disabled={activeJob && ['queued','running','waiting_rate_limit'].includes(activeJob.state)}>
+            <Button variant="primary" onclick={() => { analysisTarget = null; askAnalysis() }} disabled={activeJob && ['queued','running','waiting_rate_limit'].includes(activeJob.state)}>
               <Icon name="spark" size={15} /> Analyze the whole source
             </Button>
+            <ProviderCompare
+              sourceId={source.id}
+              transcriptId={transcript.id}
+              profiles={appState.providers}
+              defaultProfileId={defaultProfile?.id || null}
+              defaultModel={analysisModel}
+              onAdopt={askAnalysisWith}
+            />
             {#if !appState.settings?.privacy.providerDisclosureAt}
               <span class="tiny muted">You will see exactly what gets sent before the first analysis.</span>
             {/if}
@@ -1089,7 +1107,7 @@
           <div class="row" style="margin-top:8px"><Icon name="spark" size={16} /><span>Clip titles, excerpts and metadata generated during analysis</span></div>
           <div class="row" style="margin-top:8px"><Icon name="mic" size={16} /><span>Audio chunks only if you chose cloud transcription</span></div>
         </div>
-        <p>Provider: <strong style="color:var(--text)">{defaultProfile?.name || '—'}</strong> · Model: <strong style="color:var(--text)">{analysisModel || '—'}</strong></p>
+        <p>Provider: <strong style="color:var(--text)">{disclosureProfile?.name || '—'}</strong> · Model: <strong style="color:var(--text)">{disclosureModel || '—'}</strong></p>
         <p>Clipwright never sends whole videos, local files wholesale, or anything on its own initiative.</p>
       </div>
       <label class="check">

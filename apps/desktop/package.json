@@ -1,8 +1,8 @@
 {
   "name": "clipwright-desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
-  "description": "Clipwright \u2014 find the moments first, then make Shorts",
+  "description": "Clipwright — find the moments first, then make Shorts",
   "main": "./out/main/index.js",
   "author": {
     "name": "Clipwright contributors",

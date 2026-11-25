@@ -54,12 +54,19 @@ await page.waitForTimeout(1200)
 await shot(page, '03-compare-velvet.png')
 await page.getByRole('button', { name: 'Close compare' }).click()
 
+
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Studio' }).click()
 await page.waitForTimeout(2500)
 // Blur fit shows the whole source frame in the marketing shot; Fill remains the app default.
 await page.getByRole('button', { name: 'Blur fit' }).click().catch(() => {})
 await page.waitForTimeout(1200)
 await shot(page, '04-studio-velvet.png')
+await page.getByLabel('Platform safe-zone preset').selectOption('tiktok')
+await page.getByLabel('Safe zones').check()
+await page.waitForTimeout(500)
+await shot(page, '22-studio-safe-zones.png')
+await page.getByLabel('Safe zones').uncheck()
+await page.getByLabel('Platform safe-zone preset').selectOption('none')
 
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Settings' }).click()
 await page.waitForTimeout(1800)
@@ -101,7 +108,7 @@ await shot(page, '14-empty-project.png')
 // URL validation error on Home.
 await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Home' }).click()
 await page.waitForTimeout(800)
-await page.getByRole('button', { name: 'Open' }).first().click()
+await page.getByRole('button', { name: 'Import from link' }).click()
 await page.getByLabel('Video link').fill('not a link')
 await page.getByRole('button', { name: 'Import link' }).click()
 await page.waitForTimeout(1800)

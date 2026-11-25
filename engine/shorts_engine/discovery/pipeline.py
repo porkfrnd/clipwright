@@ -77,6 +77,7 @@ class DiscoveryPipeline:
         options: AnalysisOptions,
         hooks: AnalysisHooks,
         checkpoint: dict[str, Any] | None = None,
+        persist: bool = True,
     ) -> dict[str, Any]:
         checkpoint = dict(checkpoint or {})
         segments = transcript["segments"]
@@ -87,7 +88,7 @@ class DiscoveryPipeline:
         source_start = float(segments[0]["startS"])
 
         run_id = checkpoint.get("runId")
-        if not run_id:
+        if not run_id and persist:
             run = self.runs.create(
                 source["id"],
                 transcript["id"],
@@ -107,7 +108,11 @@ class DiscoveryPipeline:
             run_id = run["id"]
             checkpoint = {"runId": run_id, "batchesDone": 0, "proposals": [], "tokens": 0}
             hooks.checkpoint(checkpoint)
-        else:
+        elif not run_id:
+            # Comparison runs must not create an analysis run or candidate rows.
+            run_id = "preview"
+            checkpoint = {"runId": run_id, "batchesDone": 0, "proposals": [], "tokens": 0}
+        elif persist:
             # A re-run of an interrupted job owns the same run.
             self.candidates.clear_for_run(run_id)
 
@@ -251,15 +256,16 @@ class DiscoveryPipeline:
             cand["fit_score"] = clip_fit(cand["ratings"], cand["signals"])
 
         if not deduped:
-            self.runs.finish(
-                run_id,
-                state="failed",
-                token_usage={"totalTokens": tokens},
-                error={
-                    "code": "NO_VALID_CANDIDATES",
-                    "message": "No clip candidates passed validation. Try a different model or a shorter source.",
-                },
-            )
+            if persist:
+                self.runs.finish(
+                    run_id,
+                    state="failed",
+                    token_usage={"totalTokens": tokens},
+                    error={
+                        "code": "NO_VALID_CANDIDATES",
+                        "message": "No clip candidates passed validation. Try a different model or a shorter source.",
+                    },
+                )
             raise EngineError(
                 "NO_VALID_CANDIDATES",
                 "The AI did not propose any clip that passed validation. Try another model, "
@@ -319,23 +325,26 @@ class DiscoveryPipeline:
                 cand["categories"] = sorted(set(cand["categories"]) | {Category.best_overall.value})
         deduped.sort(key=lambda c: c["rank"])
 
-        self.candidates.clear_for_run(run_id)
-        for cand in deduped:
-            self.candidates.insert(source["id"], run_id, cand)
-        self.runs.finish(
-            run_id,
-            state="succeeded",
-            token_usage={
-                "totalTokens": tokens,
-                "candidates": len(deduped),
-                "windows": len(windows),
-                "batches": len(batches),
-                "promptVersion": PROMPT_VERSION,
-            },
-        )
+        if persist:
+            self.candidates.clear_for_run(run_id)
+            for cand in deduped:
+                self.candidates.insert(source["id"], run_id, cand)
+            self.runs.finish(
+                run_id,
+                state="succeeded",
+                token_usage={
+                    "totalTokens": tokens,
+                    "candidates": len(deduped),
+                    "windows": len(windows),
+                    "batches": len(batches),
+                    "promptVersion": PROMPT_VERSION,
+                },
+            )
         hooks.progress("done", 1.0, f"Found {len(deduped)} clip moments.")
         return {
             "analysisRunId": run_id,
+            "persisted": persist,
+            "candidates": deduped,
             "candidateCount": len(deduped),
             "windows": len(windows),
             "batches": len(batches),

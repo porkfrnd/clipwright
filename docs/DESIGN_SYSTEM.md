@@ -1,9 +1,13 @@
-# Design system — the cutting room
+# Design system — the private desk
 
-Clipwright is a private cutting room that happens to be software. The interface should feel
-like a well-kept edit desk: warm graphite surfaces, paper-white type, one brass accent, quiet
-hairlines, and timecode where timecode belongs. It is deliberately not a dashboard, not a
-landing page, and not a place for decorative AI imagery.
+Clipwright is a private workspace with a cutting room behind it. The shell is a modern dark
+productivity desk: a fixed 248 px rail, a 64 px top bar, near-black graphite, oversized sans
+display type, one warm gold accent, and calm 18–20 px cards. It borrows the clarity of a good
+dashboard without borrowing its fake metrics or growth theatre.
+
+The rule is simple: real work in the foreground, one editorial gesture per screen, nothing
+decorative that does not carry information. The supplied film-frame "C" is the brand mark and
+the desktop icon; the boot sheet is a film leader, and the release page is a ledger.
 
 The shipped screenshot set lives in [`docs/screenshots/`](screenshots/). It is captured from a
 real Electron window with real fixture data and a real local Whisper transcript. Candidates are
@@ -45,14 +49,14 @@ Bundled OFL fonts. All are copied into the renderer at build time.
 
 | Role | Family | Use |
 | --- | --- | --- |
-| Display | **Source Serif 4** | Page titles, release versions, large editorial numbers. Never body copy. |
+| Display | **Inter** | Page titles and the Home headline, at 600–650 weight with tight tracking. |
 | UI sans | **Inter** | Body, controls, labels, navigation. |
-| Mono | **JetBrains Mono** | Timecodes, segment IDs, versions, technical details. Never prose. |
+| Mono | **JetBrains Mono** | Timecodes, segment IDs, versions, technical details, KPI figures. Never prose. |
 | Subtitle display | **Bebas Neue** | Subtitle rendering only; it is a burn-in style, not chrome. |
+| Archive accents | **Source Serif 4 / Archivo Black** | Reserved for the boot leader and rare editorial moments; not used for chrome. |
 
-Headings use Source Serif at a light-to-regular weight with tight tracking. The contrast between
-the serif display and the compact mono metadata is the identity; do not replace it with a second
-sans-serif display face.
+The identity is the pairing of a large, confident sans headline with compact mono metadata.
+Do not reintroduce a serif page-title system or a second decorative display face.
 
 Timecode typography is part of the identity: `00:00 → 00:16`, `FIT 86`, segment IDs in Details.
 Numbers shown in the interface come from real data (projects, clips selected, exports validated,
@@ -60,22 +64,29 @@ minutes analyzed), never placeholder metrics.
 
 ## Shape and surface
 
-- Radius family: `6px` small controls, `10px` cards, `14px` large panels, full pill for tags and
-  mode switches. Do not mix in a second rounded language.
-- Cards use a **hairline border** plus a subtle tonal fill, not a heavy drop shadow. Shadows are
-  reserved for overlays, drawers, and the selection tray.
+- Radius family: `7px` controls, `10px` inputs, `12–14px` panels, `18–20px` workspace
+  cards, full pill for primary actions and tags. Do not mix in a second rounded language.
+- Cards use a **hairline border** plus a faint tonal lift, not a heavy drop shadow. The Home
+  bench card is the one surface allowed a soft gold glow; it marks the active workspace.
 - Hairlines are structural: section rules, table rows, ledger divisions, timeline ticks. They are
   not a border around every element.
-- Primary actions are accent-filled with dark ink. Secondary actions are quiet ghost buttons.
-  Destructive actions are text/outline until the confirmation step.
-- The shell is a fixed rail, a top bar with a small brass tick, a scrollable content column, and a
-  status bar. The rail narrows below 980 px; the content column keeps a readable measure.
+- Primary actions are accent-filled with dark ink and a 999 px pill. Secondary actions are quiet
+  ghost buttons. Destructive actions are text/outline until the confirmation step.
+- The shell is a fixed 248 px rail, a 64 px top bar, a scrollable content column, and a status
+  bar. The rail narrows and then becomes a compact strip below 980 px; content keeps a readable
+  measure. At 1440×900 the Home fold shows the hero, bench, cut rail, KPI band, and the start of
+  the drop zone without clipping.
 
-## Signature: the film leader and the release ledger
+## Signature: the film leader, the cut rail, and the release ledger
 
 The boot screen is a film-leader sequence: frame count, gate marks, and a short set of boot
 steps. It appears once and never blocks recovery; a failed engine can be retried or restarted
-from the same sheet.
+from the same sheet. The supplied gold "C" mark sits at the centre of the gate.
+
+Home carries a four-step cut rail — Import, Read, Cut, Ship — as a real workflow map, not a
+progress bar. The bench card on the right holds the last project or a first-source prompt, with
+the 9:16 frame drawn in CSS. Together they are the two editorial gestures on the page; the KPI
+band below is plain real counts.
 
 The Updates page continues the same material language as a release ledger: installed and latest
 versions set like titles, a rule between them, and a sparse sprocket perforation along the top of

@@ -179,11 +179,10 @@ test('Clipwright local flow: wizard, import, transcribe, discover, studio, expor
 
   // Home: URL validation error, then the real local import through the (E2E-stubbed) native dialog.
   await expect(page.getByRole('button', { name: /Drop in a local video/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Import from link' }).click()
   await page.getByLabel('Video link').fill('not a link')
   await page.getByRole('button', { name: 'Import link' }).click()
   await expect(page.getByText(/Links cannot contain spaces/)).toBeVisible()
-  await page.getByRole('button', { name: 'Hide', exact: true }).click()
   await page.getByRole('button', { name: /Drop in a local video/ }).click()
   await expect(page).toHaveURL(/#\/project\//)
   await expect(page.getByRole('heading', { level: 1 })).toContainText('First project')
@@ -224,6 +223,19 @@ test('Clipwright local flow: wizard, import, transcribe, discover, studio, expor
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Projects' }).click()
   await page.getByText('First project').first().click()
   await expect(page.getByRole('button', { name: /Analyze the whole source/ })).toBeVisible()
+
+  // Compare providers runs two read-only passes against the same cached transcript.
+  await page.getByRole('button', { name: 'Compare providers' }).click()
+  await expect(page.getByRole('dialog', { name: 'Compare providers' })).toBeVisible()
+  await page.getByLabel('Provider B').selectOption({ label: 'Local test stub' })
+  await expect(page.getByLabel('Model B')).toHaveValue('stub-model')
+  await page.getByRole('button', { name: 'Run comparison' }).click()
+  await expect(page.locator('.compare-result')).toHaveCount(2, { timeout: 90_000 })
+  await expect(page.locator('.compare-result').first()).toContainText(/candidates/)
+  await expect(page.getByText(/found \d+ candidates/i)).toBeVisible()
+  await page.getByRole('button', { name: 'Close provider comparison' }).click()
+  await expect(page.getByRole('dialog', { name: 'Compare providers' })).toBeHidden()
+
   await page.getByRole('button', { name: /Analyze the whole source/ }).click()
   if (await page.getByRole('button', { name: 'Analyze', exact: true }).count()) {
     await page.getByLabel(/I understand and want to analyze/).check()

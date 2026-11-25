@@ -2,6 +2,16 @@
 // Do not edit by hand. The Python Pydantic models are authoritative.
 export const PROTOCOL_VERSION = 1
 
+export interface CompareStartParams {
+  "sourceId": string;
+  "profileAId": string;
+  "modelA": string;
+  "profileBId": string;
+  "modelB": string;
+  "transcriptId"?: string | null;
+  "options"?: Record<string, unknown>;
+}
+
 export interface AnalysisEstimateParams {
   "sourceId": string;
   "providerProfileId"?: string | null;
@@ -243,6 +253,7 @@ export interface ErrorPayload {
 }
 
 export interface MethodParams {
+  "analysis.compare": CompareStartParams
   "analysis.estimate": AnalysisEstimateParams
   "analysis.list": AnalysisListParams
   "analysis.start": AnalysisStartParams

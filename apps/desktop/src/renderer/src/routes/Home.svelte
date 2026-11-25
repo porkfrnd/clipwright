@@ -3,7 +3,7 @@
   import { request, errorText } from '$lib/api'
   import Icon from '$components/Icon.svelte'
   import Button from '$components/Button.svelte'
-  import { bytesLabel, durationLabel } from '$lib/categories'
+  import { bytesLabel } from '$lib/categories'
 
   let { createProject }: { createProject: (name: string) => Promise<any> } = $props()
 
@@ -17,6 +17,7 @@
   let showUrl = $state(false)
   let authorized = $state(Boolean(appState.settings?.privacy.authorizationAcknowledgedAt))
   let recentProjects = $derived(appState.projects.slice(0, 4))
+  let lastProject = $derived(recentProjects[0] || null)
 
   function focusOnMount(node: HTMLInputElement) {
     requestAnimationFrame(() => node.focus())
@@ -24,6 +25,7 @@
 
   const totals = $derived({
     projects: appState.projects.length,
+    sources: appState.projects.reduce((sum: number, p: any) => sum + (p.counts?.sources || 0), 0),
     moments: appState.projects.reduce((sum: number, p: any) => sum + (p.counts?.selections || 0), 0),
     exports: appState.projects.reduce((sum: number, p: any) => sum + (p.counts?.exports || 0), 0)
   })
@@ -112,182 +114,157 @@
   }
 </script>
 
-<div class="page">
-  <header class="page-head home-head">
-    <div>
-      <div class="eyebrow">Workspace</div>
-      <h1 style="margin-top:8px">Find the moment.<br /><span class="gold">Make it travel.</span></h1>
-      <p>
+<div class="page home-page">
+  <section class="home-hero">
+    <div class="hero-copy">
+      <div class="eyebrow">Workspace / Home</div>
+      <h1>Find the moment.<br /><span class="gold">Make it travel.</span></h1>
+      <p class="hero-lede">
         Import a long conversation, read the whole thing, and keep only the moments that stand on their own.
-        Clipwright does the searching; you keep the taste.
+        Clipwright finds the candidates; you keep the taste.
       </p>
+      <div class="hero-actions">
+        <Button variant="primary" size="lg" onclick={() => (showNew = true)}><Icon name="plus" size={17} /> New project</Button>
+        <Button variant="ghost" size="lg" onclick={() => setRoute("projects")}><Icon name="folder" size={16} /> Open projects</Button>
+      </div>
     </div>
-    <div class="spacer"></div>
-    <Button variant="primary" size="lg" onclick={() => (showNew = true)}><Icon name="plus" size={16} /> New project</Button>
-  </header>
 
-  <section class="overview-strip">
-    <div class="overview-stats">
-      <div class="stat">
-        <div class="value">{String(totals.projects).padStart(2, '0')}</div>
-        <div class="label">Projects</div>
-      </div>
-      <div class="overview-divider"></div>
-      <div class="stat">
-        <div class="value">{String(totals.moments).padStart(2, '0')}</div>
-        <div class="label">Shorts selected</div>
-      </div>
-      <div class="overview-divider"></div>
-      <div class="stat">
-        <div class="value">{String(totals.exports).padStart(2, '0')}</div>
-        <div class="label">Exports validated</div>
-      </div>
-    </div>
-    <div class="overview-machine">
-      <div class="eyebrow">This machine</div>
-      <div class="small soft">{appState.hardware?.cpuModel || 'Checking CPU…'}</div>
-      {#if appState.hardware}
-        <div class="tiny muted">{appState.hardware.cores} cores · {bytesLabel(appState.hardware.ramBytes)}</div>
+    <aside class="bench" aria-label={lastProject ? "Last project on the bench" : "No project open"}>
+      {#if lastProject}
+        <button class="bench-card" onclick={() => setRoute("project", lastProject.id)}>
+          <div class="bench-head"><span class="eyebrow">On the bench</span><Icon name="chevron" size={14} /></div>
+          <div class="bench-body">
+            <div class="bench-frame" aria-hidden="true">
+              <span class="frame-index">9:16</span>
+              <span class="frame-line"></span>
+              <span class="frame-play"><Icon name="play" size={15} /></span>
+              <span class="frame-caption">{lastProject.counts?.selections || 0} moment{(lastProject.counts?.selections || 0) === 1 ? "" : "s"} kept</span>
+            </div>
+            <div class="bench-meta">
+              <h2>{lastProject.name}</h2>
+              <p>{lastProject.counts?.sources || 0} source{lastProject.counts?.sources === 1 ? "" : "s"} · {lastProject.counts?.selections || 0} moments kept</p>
+              <span class="bench-link">Resume discovery <Icon name="chevron" size={12} /></span>
+            </div>
+          </div>
+        </button>
+      {:else}
+        <div class="bench-card empty">
+          <div class="bench-head"><span class="eyebrow">On the bench</span><span class="tiny muted">Nothing yet</span></div>
+          <div class="bench-body">
+            <div class="bench-frame muted-frame" aria-hidden="true">
+              <span class="frame-index">9:16</span>
+              <span class="frame-line"></span>
+              <span class="frame-play"><Icon name="film" size={16} /></span>
+            </div>
+            <div class="bench-meta">
+              <h2>Your first source</h2>
+              <p>A local file or a link you own. The transcript comes first.</p>
+              <button class="link small" onclick={() => (showNew = true)}>Start a project</button>
+            </div>
+          </div>
+        </div>
       {/if}
-      <div class="row tiny muted">
-        <span class="pill">{appState.hardware?.recommendedProfile || '—'} profile</span>
-        {#if appState.hardware?.usableHardwareEncoder}<span class="pill success">{appState.hardware.usableHardwareEncoder}</span>{:else}<span class="pill">software encode</span>{/if}
-      </div>
-    </div>
+    </aside>
   </section>
 
-  <section class="workflow" aria-label="How Clipwright works">
-    <div class="workflow-step">
-      <span class="workflow-num">01</span>
-      <div><strong>Bring the source</strong><span>A local file, or a link you are authorized to use.</span></div>
-    </div>
-    <div class="workflow-sep" aria-hidden="true"></div>
-    <div class="workflow-step">
-      <span class="workflow-num">02</span>
-      <div><strong>Read the whole thing</strong><span>Captions or local Whisper turn speech into transcript.</span></div>
-    </div>
-    <div class="workflow-sep" aria-hidden="true"></div>
-    <div class="workflow-step">
-      <span class="workflow-num">03</span>
-      <div><strong>Keep the moment</strong><span>Refine the cut in Studio, then export a vertical Short.</span></div>
-    </div>
+  <section class="cut-rail" aria-label="Clipwright workflow">
+    <div class="rail-start"><span class="rail-dot"></span><span>Import</span></div>
+    <div class="rail-track"><span style="width:24%"></span><i>00:12</i></div>
+    <div class="rail-step"><Icon name="text" size={12} /><span>Read</span></div>
+    <div class="rail-track"><span style="width:50%"></span><i>00:34</i></div>
+    <div class="rail-step"><Icon name="scissors" size={12} /><span>Cut</span></div>
+    <div class="rail-track"><span style="width:76%"></span><i>00:58</i></div>
+    <div class="rail-step"><Icon name="upload" size={12} /><span>Ship</span></div>
+    <span class="rail-end">01:00</span>
   </section>
 
-  <div class="panel-grid">
-    <section class="stack">
-      <div class="section-title">
-        <h2>Start something</h2>
-        <div class="rule"></div>
-      </div>
+  <section class="kpi-band" aria-label="Workspace totals">
+    <div class="kpi"><span class="kpi-icon gold"><Icon name="projects" size={17} /></span><div><strong>{totals.projects}</strong><span>Projects</span></div></div>
+    <div class="kpi"><span class="kpi-icon blue"><Icon name="film" size={17} /></span><div><strong>{totals.sources}</strong><span>Sources</span></div></div>
+    <div class="kpi"><span class="kpi-icon green"><Icon name="scissors" size={17} /></span><div><strong>{totals.moments}</strong><span>Clips selected</span></div></div>
+    <div class="kpi"><span class="kpi-icon rose"><Icon name="upload" size={17} /></span><div><strong>{totals.exports}</strong><span>Exports validated</span></div></div>
+    <div class="kpi-machine"><span class="dot"></span><div><strong>{appState.hardware?.recommendedProfile || "Checking"} profile</strong><span>{appState.hardware ? `${appState.hardware.cores} cores · ${bytesLabel(appState.hardware.ramBytes)}` : "Reading this machine"}</span></div></div>
+  </section>
+
+  <div class="home-grid">
+    <section class="home-panel start-panel">
+      <div class="panel-head"><div class="panel-title"><span class="panel-icon gold"><Icon name="spark" size={15} /></span><div><h2>Start something</h2><p>Drop a file, or bring a link you are allowed to use.</p></div></div></div>
       <button
-        class={`dropzone ${dragOver ? 'drag-over' : ''}`}
+        class={`dropzone dropzone-large ${dragOver ? "drag-over" : ""}`}
         onclick={importLocal}
         disabled={importing}
         ondragover={(e) => { e.preventDefault(); dragOver = true }}
         ondragleave={() => (dragOver = false)}
         ondrop={dropFile}
+        aria-label="Drop in a local video or browse files"
       >
-        <Icon name="upload" size={44} />
-        <div>
-          <h3>{importing ? 'Reading the file…' : 'Drop in a local video'}</h3>
-          <p class="small muted" style="margin-top:4px">MP4, MKV, WebM, MOV or audio. Nothing is uploaded.</p>
-        </div>
-        <span class="pill">Choose file</span>
+        <span class="drop-icon"><Icon name="upload" size={24} /></span>
+        <span class="drop-title">{importing ? "Reading the file…" : "Drop a video here"}</span>
+        <span class="drop-sub">or click to browse · MP4, MKV, WebM, MOV, audio up to 4 GB</span>
+        <span class="drop-action"><Icon name="folder" size={13} /> Choose file</span>
       </button>
-
-      <div class="card tight">
-        <div class="spread">
-          <div class="row">
-            <Icon name="globe" size={18} />
-            <div>
-              <h3>Import from a link</h3>
-              <p class="tiny muted">Uses yt-dlp. Only audio for the transcript and the sections you select are fetched.</p>
-            </div>
-          </div>
-          <button class="link tiny" onclick={() => (showUrl = !showUrl)}>{showUrl ? 'Hide' : 'Open'}</button>
-        </div>
-        {#if showUrl}
-          <div class="stack" style="margin-top:14px">
-            <div class="notice warn">
-              Only import content you own or are authorized to reuse. A reachable link is not permission to republish.
-            </div>
-            {#if !authorized}
-              <label class="check">
-                <input type="checkbox" bind:checked={authorized} />
-                <span>I own this content or have permission to reuse it.</span>
-              </label>
-            {/if}
-            <div class="row">
-              <input class="input mono" bind:value={url} placeholder="https://…" aria-label="Video link" />
-              <Button variant="primary" onclick={importUrl} disabled={importingUrl || !url.trim() || !authorized}>
-                {importingUrl ? 'Checking…' : 'Import link'}
-              </Button>
-            </div>
-            {#if urlError}
-              <div class="notice error">
-                {urlError}
-                <button class="link" onclick={importLocal}>Import the file from disk instead</button>
-              </div>
-            {/if}
-          </div>
-        {/if}
+      <div class="import-row">
+        <button class="import-pill" onclick={() => (showUrl = !showUrl)} aria-expanded={showUrl}>
+          <Icon name="globe" size={15} /><span>Import from link</span><Icon name="chevron" size={12} />
+        </button>
+        <span class="tiny muted"><Icon name="shield" size={12} /> Only the sections you choose are downloaded.</span>
       </div>
+      {#if showUrl}
+        <div class="stack import-panel">
+          <div class="notice warn">Only import content you own or are authorized to reuse. A reachable link is not permission to republish.</div>
+          <label class="check"><input type="checkbox" bind:checked={authorized} /><span>I own this content or have permission to reuse it.</span></label>
+          <div class="row">
+            <input class="input mono" bind:value={url} placeholder="https://…" aria-label="Video link" />
+            <Button variant="primary" onclick={importUrl} disabled={importingUrl || !url.trim() || !authorized}>{importingUrl ? "Checking…" : "Import link"}</Button>
+          </div>
+          {#if urlError}
+            <div class="notice error">{urlError}<button class="link" onclick={importLocal}>Import the file from disk instead</button></div>
+          {/if}
+        </div>
+      {/if}
     </section>
 
-    <section class="stack">
-      <div class="section-title">
-        <h2>Recent projects</h2>
-        <div class="rule"></div>
-      </div>
+    <section class="home-panel recent-panel">
+      <div class="panel-head"><div class="panel-title"><span class="panel-icon blue"><Icon name="clock" size={15} /></span><div><h2>Recent projects</h2><p>Pick up where the cutting room left off.</p></div></div><button class="link small" onclick={() => setRoute("projects")}>View all</button></div>
       {#if recentProjects.length}
-        <div class="list">
+        <div class="recent-list">
           {#each recentProjects as project (project.id)}
-            <button class="list-item" style="text-align:left" onclick={() => setRoute('project', project.id)}>
-              <div style="width:38px;height:38px;border-radius:12px;background:var(--surface-3);display:grid;place-items:center">
-                <Icon name="film" size={17} />
-              </div>
-              <div class="grow">
-                <div class="small" style="font-weight:600">{project.name}</div>
-                <div class="tiny muted">
-                  {project.counts?.sources || 0} source{project.counts?.sources === 1 ? '' : 's'} ·
-                  {project.counts?.selections || 0} selected
-                </div>
-              </div>
+            <button class="recent-row" onclick={() => setRoute("project", project.id)}>
+              <div class="recent-thumb"><Icon name="film" size={17} /><span>{String(project.counts?.selections || 0).padStart(2, "0")}</span></div>
+              <div class="recent-copy"><strong>{project.name}</strong><span>{project.counts?.sources || 0} source{project.counts?.sources === 1 ? "" : "s"} · {project.counts?.selections || 0} selected</span></div>
               <Icon name="chevron" size={14} />
             </button>
           {/each}
         </div>
       {:else}
-        <div class="empty card">
-          <svg class="line-art" viewBox="0 0 150 90" fill="none" stroke="currentColor" stroke-width="1.2">
-            <rect x="14" y="20" width="122" height="50" rx="6" />
-            <path d="M14 32h122M14 58h122M34 20v50M116 20v50" opacity=".5" />
-            <circle cx="75" cy="45" r="10" />
-            <path d="m72 40 8 5-8 5v-10Z" fill="currentColor" stroke="none" />
-          </svg>
-          <h3>No projects yet</h3>
-          <p>Import a local file or a link, then Clipwright will read the whole conversation and propose moments.</p>
+        <div class="recent-empty">
+          <Icon name="film" size={22} />
+          <div><strong>No projects yet</strong><p>Your first import will appear here with its sources and kept moments.</p></div>
+          <button class="link small" onclick={() => (showNew = true)}>Create one</button>
         </div>
       {/if}
     </section>
   </div>
 
-  {#if showNew}
-    <div class="drawer-backdrop" onclick={(e) => e.target === e.currentTarget && (showNew = false)} role="presentation">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-title">
-        <div>
-          <div class="eyebrow">New project</div>
-          <h2 id="new-title">Name the project</h2>
-        </div>
-        <div class="field">
-          <label for="project-name">Project name</label>
-          <input id="project-name" class="input" bind:value={newName} placeholder="Episode 14 · the quiet interview" onkeydown={(e) => e.key === 'Enter' && newProject()} use:focusOnMount />
-        </div>
-        <div class="row" style="justify-content:flex-end">
-          <Button variant="ghost" onclick={() => (showNew = false)}>Cancel</Button>
-          <Button variant="primary" onclick={newProject}>Create project</Button>
-        </div>
+  <section class="feature-row" aria-label="How Clipwright works">
+    <div class="feature"><span class="feature-icon gold"><Icon name="shield" size={16} /></span><div><strong>Local-first by default</strong><p>Your footage stays on this machine unless you pick a cloud provider.</p></div></div>
+    <div class="feature"><span class="feature-icon blue"><Icon name="text" size={16} /></span><div><strong>Transcript-first discovery</strong><p>Every proposed clip points back to the words it came from.</p></div></div>
+    <div class="feature"><span class="feature-icon green"><Icon name="frame" size={16} /></span><div><strong>Frame-checked exports</strong><p>Caption timing and vertical framing are verified after the render.</p></div></div>
+  </section>
+</div>
+
+{#if showNew}
+  <div class="drawer-backdrop" onclick={(e) => e.target === e.currentTarget && (showNew = false)} role="presentation">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="new-title">
+      <div><div class="eyebrow">New project</div><h2 id="new-title">Name the project</h2></div>
+      <div class="field">
+        <label for="project-name">Project name</label>
+        <input id="project-name" class="input" bind:value={newName} placeholder="Episode 14 · the quiet interview" onkeydown={(e) => e.key === "Enter" && newProject()} use:focusOnMount />
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <Button variant="ghost" onclick={() => (showNew = false)}>Cancel</Button>
+        <Button variant="primary" onclick={newProject}>Create project</Button>
       </div>
     </div>
-  {/if}
-</div>
+  </div>
+{/if}

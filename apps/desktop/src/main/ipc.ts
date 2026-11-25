@@ -15,7 +15,8 @@ const ALLOWED_METHODS = new Set([
   'source.import_file', 'source.import_url', 'source.get', 'source.probe', 'source.preview',
   'source.fetch_preview', 'source.set_authorization', 'media.resolve',
   'transcription.start', 'transcript.get', 'transcript.list',
-  'analysis.start', 'analysis.estimate', 'analysis.list',
+  'captions.sync_check', 'captions.preview', 'timeline.plan',
+  'analysis.start', 'analysis.estimate', 'analysis.list', 'analysis.compare',
   'candidates.list', 'candidates.update_bounds', 'candidates.revisions', 'candidates.undo', 'candidates.rename', 'candidates.set_status',
   'selection.set', 'selection.list', 'edit.get', 'edit.set', 'metadata.generate',
   'render.start', 'render.queue',
@@ -67,7 +68,7 @@ function decorate(method: string, result: any): any {
       }
     }
   }
-  if (result.path && (method === 'source.preview' || method === 'source.fetch_preview')) {
+  if (result.path && (method === 'source.preview' || method === 'source.fetch_preview' || method === 'captions.preview')) {
     result.mediaUrl = registerMedia(result.path)
     delete result.path
   }
@@ -175,7 +176,10 @@ export function registerIpc(engine: EngineClient, secrets: SecretStore, getWindo
     }
     try {
       const result = await engine.request(method, params, {
-        timeoutMs: method === 'binaries.update' || method === 'source.fetch_preview' ? 600000 : 180000,
+        timeoutMs:
+          method === 'binaries.update' || method === 'source.fetch_preview' || method === 'analysis.compare'
+            ? 600000
+            : 180000,
         secrets: Object.keys(secretPayload).length ? secretPayload : undefined
       })
       if (method === 'render.start') {
