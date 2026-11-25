@@ -88,8 +88,10 @@ cd ../..
 ./scripts/verify-package
 ```
 
-Current Linux artifacts and sizes are in [`docs/RELEASE.md`](docs/RELEASE.md). The packaged
-unpacked app completed the full local flow with `PATH` empty (no system Python/Node/FFmpeg).
+Current Linux artifacts and sizes are in [`docs/RELEASE.md`](docs/RELEASE.md), and the
+[public v0.1.1 release](https://github.com/porkfrnd/clipwright/releases/tag/v0.1.1) has the
+AppImage, `.deb` and SHA-256 sums. The packaged unpacked app completed the full local flow
+with `PATH` empty (no system Python/Node/FFmpeg).
 
 ## Tests
 
@@ -160,9 +162,9 @@ authorized, or import the local file.
 - **Face tracking: not implemented** — static center crop / blur fit.
 - **Cloud transcription: not tested live.**
 - **Hardware encoding: unavailable on the build machine** — software libx264 verified.
-- **Update checks: the GitHub path is implemented and unit-tested with a local API stub** — the
-  first public release is v0.1.1. A future release is what proves the end-to-end notification
-  in a previously installed build.
+- **Update checks: the GitHub path is unit-tested with a local API stub and live-tested against
+  the published v0.1.1 release** — 0.1.1 reports itself current. The next tagged release is what
+  proves the end-to-end notification in a previously installed build.
 - **FFmpeg is GPL-2.0-or-later**; commercial redistribution needs legal review.
 
 Full list: [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md).
